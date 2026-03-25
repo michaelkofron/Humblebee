@@ -43,4 +43,14 @@ def init_db() -> duckdb.DuckDBPyConnection:
         ON events (site_id)
     """)
 
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS hives (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
+            conditions TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT current_timestamp,
+            updated_at TIMESTAMP DEFAULT current_timestamp
+        )
+    """)
+
     return con

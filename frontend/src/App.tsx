@@ -1,46 +1,63 @@
 import { useEffect, useState } from 'react'
+import type { Site, View } from './types'
+import Overview from './components/Overview'
+import JourneyExplorer from './components/JourneyExplorer'
+import Hives from './components/Hives'
 
 export default function App() {
-  const [healthy, setHealthy] = useState<boolean | null>(null)
+  const [sites, setSites] = useState<Site[]>([])
+  const [selectedSite, setSelectedSite] = useState<string>('')
+  const [view, setView] = useState<View>('overview')
 
   useEffect(() => {
-    fetch('/api/health')
+    fetch('/api/sites')
       .then(r => r.json())
-      .then(d => setHealthy(d.status === 'ok'))
-      .catch(() => setHealthy(false))
+      .then(setSites)
+      .catch(() => {})
   }, [])
 
-  return (
-    <div style={{ maxWidth: 1080, margin: '0 auto', padding: '48px 24px' }}>
-      <header style={{ marginBottom: 48 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>
-          DataBee
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
-          Multi-site user journey analytics
-        </p>
-      </header>
+  const tabs: { key: View; label: string }[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'journey', label: 'Journeys' },
+    { key: 'hives', label: 'Hives' },
+  ]
 
-      <div style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        padding: 24,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 10,
-      }}>
-        <span style={{
-          width: 10,
-          height: 10,
-          borderRadius: '50%',
-          background: healthy === null ? 'var(--text-muted)' : healthy ? '#22c55e' : 'var(--error)',
-          flexShrink: 0,
-        }} />
-        <span style={{ color: 'var(--text-secondary)' }}>
-          {healthy === null ? 'Checking backend…' : healthy ? 'Backend connected' : 'Backend unreachable'}
-        </span>
+  return (
+    <>
+      <div className="topbar">
+        <div className="topbar-logo">🐝 DataBee</div>
+        <div className="topbar-divider" />
+
+        <select
+          className="select"
+          value={selectedSite}
+          onChange={e => setSelectedSite(e.target.value)}
+          style={{ minWidth: 160 }}
+        >
+          <option value="">All sites</option>
+          {sites.map(s => (
+            <option key={s.site_id} value={s.site_id}>{s.site_name}</option>
+          ))}
+        </select>
+
+        <nav className="topbar-nav">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              className={`topbar-tab${view === t.key ? ' active' : ''}`}
+              onClick={() => setView(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
       </div>
-    </div>
+
+      <div className="main">
+        {view === 'overview' && <Overview siteId={selectedSite} />}
+        {view === 'journey' && <JourneyExplorer siteId={selectedSite} />}
+        {view === 'hives' && <Hives siteId={selectedSite} />}
+      </div>
+    </>
   )
 }
