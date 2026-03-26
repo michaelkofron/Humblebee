@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Site, View } from './types'
 import Overview from './components/Overview'
-import JourneyExplorer from './components/JourneyExplorer'
-import Hives from './components/Hives'
+import Colonies from './components/Colonies'
 
 export default function App() {
   const [sites, setSites] = useState<Site[]>([])
@@ -18,8 +17,7 @@ export default function App() {
 
   const tabs: { key: View; label: string }[] = [
     { key: 'overview', label: 'Overview' },
-    { key: 'journey', label: 'Journeys' },
-    { key: 'hives', label: 'Hives' },
+    { key: 'colonies', label: 'Colonies' },
   ]
 
   return (
@@ -55,8 +53,7 @@ export default function App() {
 
       <div className="main">
         {view === 'overview' && <Overview siteId={selectedSite} />}
-        {view === 'journey' && <JourneyExplorer siteId={selectedSite} />}
-        {view === 'hives' && <Hives siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? ''} />}
+        {view === 'colonies' && <Colonies siteId={selectedSite} />}
       </div>
     </>
   )

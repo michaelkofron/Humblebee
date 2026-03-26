@@ -118,7 +118,8 @@ def stats(
 def list_uuids(
     site_id: str | None = None,
     q: str | None = None,
-    limit: int = 30,
+    limit: int = 100,
+    offset: int = 0,
 ):
     where = []
     params: list = []
@@ -132,6 +133,11 @@ def list_uuids(
 
     clause = (" WHERE " + " AND ".join(where)) if where else ""
 
+    total = db().execute(
+        f"SELECT COUNT(DISTINCT e.uuid) FROM events e{clause}",
+        params,
+    ).fetchone()[0]
+
     rows = db().execute(
         f"""
         SELECT e.uuid, e.site_id, s.site_name,
@@ -141,18 +147,21 @@ def list_uuids(
         {clause}
         GROUP BY e.uuid, e.site_id, s.site_name
         ORDER BY last_seen DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
         """,
-        params + [limit],
+        params + [limit, offset],
     ).fetchall()
 
-    return [
-        {
-            "uuid": r[0], "site_id": r[1], "site_name": r[2],
-            "first_seen": str(r[3]), "last_seen": str(r[4]),
-        }
-        for r in rows
-    ]
+    return {
+        "total": total,
+        "items": [
+            {
+                "uuid": r[0], "site_id": r[1], "site_name": r[2],
+                "first_seen": str(r[3]), "last_seen": str(r[4]),
+            }
+            for r in rows
+        ],
+    }
 
 
 # ── Journey ───────────────────────────────────────────────────────────────────
@@ -290,7 +299,8 @@ def hive_count(hive_id: str):
 class ConditionSearch(BaseModel):
     conditions: list[dict]
     site_id: str | None = None
-    limit: int = 30
+    limit: int = 100
+    offset: int = 0
 
 
 @app.post("/api/journey/search")
@@ -321,14 +331,14 @@ def journey_search(body: ConditionSearch):
     for uid, evts in journeys.items():
         if _journey_matches(evts, body.conditions):
             matching.append(uid)
-            if len(matching) >= body.limit:
-                break
 
-    # Fetch display info for matching UUIDs
-    if not matching:
-        return []
+    total = len(matching)
+    page = matching[body.offset : body.offset + body.limit]
 
-    placeholders = ",".join(["?"] * len(matching))
+    if not page:
+        return {"total": total, "items": []}
+
+    placeholders = ",".join(["?"] * len(page))
     rows = db().execute(
         f"""
         SELECT e.uuid, e.site_id, s.site_name,
@@ -339,16 +349,19 @@ def journey_search(body: ConditionSearch):
         GROUP BY e.uuid, e.site_id, s.site_name
         ORDER BY last_seen DESC
         """,
-        matching,
+        page,
     ).fetchall()
 
-    return [
-        {
-            "uuid": r[0], "site_id": r[1], "site_name": r[2],
-            "first_seen": str(r[3]), "last_seen": str(r[4]),
-        }
-        for r in rows
-    ]
+    return {
+        "total": total,
+        "items": [
+            {
+                "uuid": r[0], "site_id": r[1], "site_name": r[2],
+                "first_seen": str(r[3]), "last_seen": str(r[4]),
+            }
+            for r in rows
+        ],
+    }
 
 
 def _journey_matches(events: list[tuple], conditions: list[dict]) -> bool:

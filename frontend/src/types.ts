@@ -56,4 +56,4 @@ export interface Hive {
   updated_at: string
 }
 
-export type View = 'overview' | 'journey' | 'hives'
+export type View = 'overview' | 'colonies'
