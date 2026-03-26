@@ -36,6 +36,10 @@ export interface UuidRow {
   site_name: string
   first_seen: string
   last_seen: string
+  session_count: number
+  page_count: number
+  first_custom_event: string | null
+  custom_event_count: number
 }
 
 export type HiveConditionField = 'event_name' | 'page_path' | 'page_referrer' | 'entry_page'

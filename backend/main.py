@@ -154,7 +154,11 @@ def list_uuids(
     rows = db().execute(
         f"""
         SELECT e.uuid, e.site_id, s.site_name,
-               MIN(e.timestamp) as first_seen, MAX(e.timestamp) as last_seen
+               MIN(e.timestamp) as first_seen, MAX(e.timestamp) as last_seen,
+               COUNT(DISTINCT e.session_id) as session_count,
+               SUM(CASE WHEN e.event_name = 'page_view' THEN 1 ELSE 0 END)::INTEGER as page_count,
+               MIN(CASE WHEN e.event_name != 'page_view' THEN e.event_name END) as first_custom_event,
+               SUM(CASE WHEN e.event_name != 'page_view' THEN 1 ELSE 0 END)::INTEGER as custom_event_count
         FROM events e
         JOIN sites s ON s.site_id = e.site_id
         {clause}
@@ -167,13 +171,18 @@ def list_uuids(
 
     return {
         "total": total,
-        "items": [
-            {
-                "uuid": r[0], "site_id": r[1], "site_name": r[2],
-                "first_seen": str(r[3]), "last_seen": str(r[4]),
-            }
-            for r in rows
-        ],
+        "items": [_uuid_row(r) for r in rows],
+    }
+
+
+def _uuid_row(r: tuple) -> dict:
+    return {
+        "uuid": r[0], "site_id": r[1], "site_name": r[2],
+        "first_seen": str(r[3]), "last_seen": str(r[4]),
+        "session_count": r[5],
+        "page_count": r[6],
+        "first_custom_event": r[7],
+        "custom_event_count": r[8],
     }
 
 
@@ -377,7 +386,11 @@ def journey_search(body: ConditionSearch):
     rows = db().execute(
         f"""
         SELECT e.uuid, e.site_id, s.site_name,
-               MIN(e.timestamp) as first_seen, MAX(e.timestamp) as last_seen
+               MIN(e.timestamp) as first_seen, MAX(e.timestamp) as last_seen,
+               COUNT(DISTINCT e.session_id) as session_count,
+               SUM(CASE WHEN e.event_name = 'page_view' THEN 1 ELSE 0 END)::INTEGER as page_count,
+               MIN(CASE WHEN e.event_name != 'page_view' THEN e.event_name END) as first_custom_event,
+               SUM(CASE WHEN e.event_name != 'page_view' THEN 1 ELSE 0 END)::INTEGER as custom_event_count
         FROM events e
         JOIN sites s ON s.site_id = e.site_id
         WHERE e.uuid IN ({placeholders})
@@ -389,13 +402,7 @@ def journey_search(body: ConditionSearch):
 
     return {
         "total": total,
-        "items": [
-            {
-                "uuid": r[0], "site_id": r[1], "site_name": r[2],
-                "first_seen": str(r[3]), "last_seen": str(r[4]),
-            }
-            for r in rows
-        ],
+        "items": [_uuid_row(r) for r in rows],
     }
 
 
