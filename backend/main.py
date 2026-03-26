@@ -117,6 +117,63 @@ def stats(
     }
 
 
+# ── Paginated top pages / top events ──────────────────────────────────────────
+
+def _stat_filters(site_id, start, end):
+    filters: list[str] = []
+    params: list = []
+    if site_id:
+        filters.append("site_id = ?")
+        params.append(site_id)
+    if start:
+        filters.append("timestamp >= CAST(? AS TIMESTAMP)")
+        params.append(start)
+    if end:
+        filters.append("timestamp < CAST(? AS TIMESTAMP) + INTERVAL 1 DAY")
+        params.append(end)
+    clause = (" WHERE " + " AND ".join(filters)) if filters else ""
+    return clause, params
+
+
+@app.get("/api/pages")
+def list_pages(
+    site_id: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    clause, params = _stat_filters(site_id, start, end)
+    pv = clause + (" AND " if clause else " WHERE ") + "event_name = 'page_view'"
+    total = db().execute(
+        f"SELECT COUNT(DISTINCT page_path) FROM events{pv}", params
+    ).fetchone()[0]
+    rows = db().execute(
+        f"SELECT page_path, COUNT(*) as views FROM events{pv} GROUP BY page_path ORDER BY views DESC LIMIT ? OFFSET ?",
+        params + [limit, offset],
+    ).fetchall()
+    return {"total": total, "items": [{"page_path": r[0], "views": r[1]} for r in rows]}
+
+
+@app.get("/api/events")
+def list_events(
+    site_id: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    clause, params = _stat_filters(site_id, start, end)
+    total = db().execute(
+        f"SELECT COUNT(DISTINCT event_name) FROM events{clause}", params
+    ).fetchone()[0]
+    rows = db().execute(
+        f"SELECT event_name, COUNT(*) as count FROM events{clause} GROUP BY event_name ORDER BY count DESC LIMIT ? OFFSET ?",
+        params + [limit, offset],
+    ).fetchall()
+    return {"total": total, "items": [{"event_name": r[0], "count": r[1]} for r in rows]}
+
+
 # ── UUID listing ──────────────────────────────────────────────────────────────
 
 @app.get("/api/uuids")

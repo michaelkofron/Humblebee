@@ -67,8 +67,8 @@ export default function App() {
       </div>
 
       <div className="main">
-        {view === 'overview' && <Overview siteId={selectedSite} startDate={startDate} endDate={endDate} />}
-        {view === 'colonies' && <Colonies siteId={selectedSite} startDate={startDate} endDate={endDate} />}
+        {view === 'overview' && <Overview siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />}
+        {view === 'colonies' && <Colonies siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />}
       </div>
     </>
   )
