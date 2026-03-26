@@ -381,10 +381,10 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
         </div>
       </div>
 
-      {/* Filter conditions */}
+      {/* Colony creator */}
       <div className="card" style={{ marginBottom: 16, overflow: 'hidden' }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Filter conditions</span>
+          <span>Colony creator</span>
           <div style={{ display: 'flex', gap: 6 }}>
             {filterActive && conditions.length > 0 && (
               <button className="btn btn-primary" onClick={openSaveModal} style={{ padding: '4px 12px', fontSize: 12 }}>
@@ -393,7 +393,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
             )}
             {conditions.length === 0 && (
               <button className="btn btn-ghost" onClick={addCondition} style={{ padding: '4px 10px', fontSize: 12 }}>
-                + Add
+                New Colony +
               </button>
             )}
           </div>
