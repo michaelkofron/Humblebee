@@ -41,6 +41,21 @@ function conditionSummary(conditions: HiveCondition[]): string {
   }).join(' · ')
 }
 
+function uuidSubline(u: { site_name: string; last_seen: string; session_count: number; page_count: number; first_custom_event: string | null; custom_event_count: number }) {
+  const events = u.first_custom_event
+    ? u.custom_event_count > 1
+      ? `${u.first_custom_event} +${u.custom_event_count - 1} more`
+      : u.first_custom_event
+    : null
+  return [
+    u.site_name,
+    `Active ${formatTs(u.last_seen)}`,
+    `${u.page_count} page${u.page_count !== 1 ? 's' : ''}`,
+    `${u.session_count} session${u.session_count !== 1 ? 's' : ''}`,
+    events,
+  ].filter(Boolean).join(' · ')
+}
+
 function groupBySession(events: JourneyEvent[]) {
   const groups: { session_id: string; events: JourneyEvent[] }[] = []
   let current: typeof groups[number] | null = null
@@ -341,7 +356,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
               <div>
                 <div className="text-mono" style={{ fontSize: 12 }}>{u.uuid}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {u.site_name} · {formatTs(u.last_seen)}
+                  {uuidSubline(u)}
                 </div>
               </div>
             </div>
@@ -591,7 +606,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
                           <div>
                             <div className="text-mono" style={{ fontSize: 12 }}>{u.uuid}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                              {u.site_name} · {formatTs(u.last_seen)}
+                              {uuidSubline(u)}
                             </div>
                           </div>
                         </div>
