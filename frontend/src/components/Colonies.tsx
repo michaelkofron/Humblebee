@@ -77,6 +77,8 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
   const [expandedColony, setExpandedColony] = useState<string | null>(null)
   const [colonyUuids, setColonyUuids] = useState<Record<string, UuidRow[]>>({})
   const [colonyUuidLoading, setColonyUuidLoading] = useState<Record<string, boolean>>({})
+  const [colonyLoadingMore, setColonyLoadingMore] = useState(false)
+  const colonyListRef = useRef<HTMLDivElement>(null)
 
   // Save modal
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -210,8 +212,9 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
   }
 
   // Colony UUID fetch + accordion toggle
-  const fetchColonyUuids = useCallback((colony: Hive) => {
-    setColonyUuidLoading(prev => ({ ...prev, [colony.id]: true }))
+  const fetchColonyUuids = useCallback((colony: Hive, offset: number, append: boolean) => {
+    if (append) setColonyLoadingMore(true)
+    else setColonyUuidLoading(prev => ({ ...prev, [colony.id]: true }))
     fetch('/api/journey/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -219,18 +222,21 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
         conditions: colony.conditions,
         site_id: colony.site_id || siteId || null,
         limit: PAGE_SIZE,
-        offset: 0,
+        offset,
         start: startDate || null,
         end: endDate || null,
       }),
     })
       .then(r => r.json())
       .then((data: { total: number; items: UuidRow[] }) => {
-        setColonyUuids(prev => ({ ...prev, [colony.id]: data.items }))
+        setColonyUuids(prev => ({ ...prev, [colony.id]: append ? [...(prev[colony.id] ?? []), ...data.items] : data.items }))
         setColonyCounts(prev => ({ ...prev, [colony.id]: data.total }))
       })
       .catch(() => {})
-      .finally(() => setColonyUuidLoading(prev => ({ ...prev, [colony.id]: false })))
+      .finally(() => {
+        setColonyUuidLoading(prev => ({ ...prev, [colony.id]: false }))
+        setColonyLoadingMore(false)
+      })
   }, [siteId, startDate, endDate])
 
   const toggleColony = (colony: Hive) => {
@@ -238,9 +244,22 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
       setExpandedColony(null)
     } else {
       setExpandedColony(colony.id)
-      fetchColonyUuids(colony)
+      fetchColonyUuids(colony, 0, false)
     }
   }
+
+  const handleColonyScroll = useCallback(() => {
+    const el = colonyListRef.current
+    if (!el || colonyLoadingMore || !expandedColony) return
+    const colony = colonies.find(h => h.id === expandedColony)
+    if (!colony) return
+    const list = colonyUuids[colony.id] ?? []
+    const total = colonyCounts[colony.id] ?? 0
+    if (list.length >= total) return
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) {
+      fetchColonyUuids(colony, list.length, true)
+    }
+  }, [colonyLoadingMore, expandedColony, colonies, colonyUuids, colonyCounts, fetchColonyUuids])
 
   // Re-run filter + recount all colonies + refresh expanded colony UUIDs when dates change
   const prevDates = useRef({ startDate, endDate })
@@ -252,7 +271,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
     if (colonies.length > 0) countAll(colonies.map(h => h.id), startDate, endDate)
     if (expandedColony) {
       const colony = colonies.find(h => h.id === expandedColony)
-      if (colony) fetchColonyUuids(colony)
+      if (colony) fetchColonyUuids(colony, 0, false)
     }
   }, [startDate, endDate, filterActive, colonies, countAll, expandedColony, fetchColonyUuids])
 
@@ -283,7 +302,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
       body: JSON.stringify({ name: colonyName.trim(), conditions, site_id: siteId || null }),
     })
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(h => { setColonies(prev => [h, ...prev]); setShowSaveModal(false); countAll([h.id], startDate, endDate) })
+      .then(h => { setColonies(prev => [h, ...prev]); setShowSaveModal(false); countAll([h.id], startDate, endDate); clearFilter() })
       .catch(() => setSaveError('Failed to save'))
       .finally(() => setSaving(false))
   }
@@ -561,7 +580,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
                   ) : uuidList.length === 0 ? (
                     <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No matches</div>
                   ) : (
-                    <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                    <div ref={colonyListRef} onScroll={handleColonyScroll} style={{ maxHeight: 360, overflowY: 'auto' }}>
                       {uuidList.map(u => (
                         <div
                           key={u.uuid + u.site_id}
@@ -577,6 +596,11 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
                           </div>
                         </div>
                       ))}
+                      {colonyLoadingMore && (
+                        <div style={{ padding: 12, textAlign: 'center' }}>
+                          <span className="spinner" style={{ width: 16, height: 16 }} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
