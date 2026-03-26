@@ -273,18 +273,30 @@ def delete_hive(hive_id: str):
 
 
 @app.get("/api/hives/{hive_id}/count")
-def hive_count(hive_id: str):
+def hive_count(
+    hive_id: str,
+    start: str | None = None,
+    end: str | None = None,
+):
     row = db().execute("SELECT conditions, site_id FROM hives WHERE id = ?", [hive_id]).fetchone()
     if not row:
         raise HTTPException(404, "Hive not found")
     conditions = json.loads(row[0])
     hive_site_id = row[1]
 
-    where = ""
+    filters = []
     params: list = []
     if hive_site_id:
-        where = " WHERE site_id = ?"
-        params = [hive_site_id]
+        filters.append("site_id = ?")
+        params.append(hive_site_id)
+    if start:
+        filters.append("timestamp >= CAST(? AS TIMESTAMP)")
+        params.append(start)
+    if end:
+        filters.append("timestamp < CAST(? AS TIMESTAMP) + INTERVAL 1 DAY")
+        params.append(end)
+
+    where = (" WHERE " + " AND ".join(filters)) if filters else ""
 
     # Get all events grouped by uuid
     events_rows = db().execute(

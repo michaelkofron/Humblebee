@@ -187,7 +187,10 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
   // Colony actions
   const countColony = (id: string) => {
     setCountLoading(prev => ({ ...prev, [id]: true }))
-    fetch(`/api/hives/${id}/count`)
+    const p = new URLSearchParams()
+    if (startDate) p.set('start', startDate)
+    if (endDate) p.set('end', endDate)
+    fetch(`/api/hives/${id}/count?${p}`)
       .then(r => r.json())
       .then(d => setColonyCounts(prev => ({ ...prev, [id]: d.count })))
       .catch(() => {})
