@@ -38,9 +38,9 @@ export interface UuidRow {
   last_seen: string
 }
 
-export type HiveConditionField = 'event_name' | 'page_path' | 'page_referrer'
-export type HiveConditionMatch = 'equals' | 'contains'
-export type HiveSequence = 'anytime' | 'immediately'
+export type HiveConditionField = 'event_name' | 'page_path' | 'page_referrer' | 'entry_page'
+export type HiveConditionMatch = 'is' | 'is_not' | 'contains' | 'does_not_contain'
+export type HiveSequence = 'anytime' | 'immediately' | 'next_session'
 
 export interface HiveCondition {
   field: HiveConditionField

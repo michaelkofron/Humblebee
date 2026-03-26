@@ -6,17 +6,21 @@ const PAGE_SIZE = 100
 const CONDITION_FIELDS: { value: HiveConditionField; label: string; placeholder: string }[] = [
   { value: 'event_name',    label: 'Event name',    placeholder: 'e.g. signup' },
   { value: 'page_path',     label: 'Page path',     placeholder: 'e.g. /pricing' },
+  { value: 'entry_page',    label: 'Entry page',    placeholder: 'e.g. /blog/getting-started' },
   { value: 'page_referrer', label: 'Page referrer', placeholder: 'e.g. google.com' },
 ]
 
 const MATCH_OPTIONS: { value: HiveConditionMatch; label: string }[] = [
-  { value: 'equals',   label: 'is exactly' },
-  { value: 'contains', label: 'contains' },
+  { value: 'is',               label: 'is' },
+  { value: 'is_not',           label: 'is not' },
+  { value: 'contains',         label: 'contains' },
+  { value: 'does_not_contain', label: 'does not contain' },
 ]
 
 const SEQUENCE_OPTIONS: { value: HiveSequence; label: string }[] = [
-  { value: 'anytime',     label: 'any time later' },
-  { value: 'immediately', label: 'immediately followed by' },
+  { value: 'immediately',   label: 'immediately after' },
+  { value: 'next_session',  label: 'in the next session' },
+  { value: 'anytime',       label: 'any time later' },
 ]
 
 function placeholderFor(field: HiveConditionField) {
@@ -152,7 +156,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
 
   // Condition actions
   const addCondition = () => {
-    setConditions(prev => [...prev, { field: 'event_name', match: 'equals', value: '', sequence: 'anytime' }])
+    setConditions(prev => [...prev, { field: 'event_name', match: 'is', value: '', sequence: 'anytime' }])
   }
 
   const updateCondition = (i: number, patch: Partial<HiveCondition>) => {
@@ -438,7 +442,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Saved Colonies</h3>
         {colonies.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
-            No colonies yet — use the filter above and save one
+            🍯 No colonies yet — use the filter above and save one
           </div>
         )}
         {colonies.map(h => (
@@ -474,11 +478,11 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
                 }}>
                   {i > 0 && (
                     <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>
-                      {c.sequence === 'immediately' ? 'then' : 'later'}
+                      {c.sequence === 'immediately' ? 'immediately after' : c.sequence === 'next_session' ? 'next session' : 'any time later'}
                     </span>
                   )}
                   <span style={{ color: 'var(--text-secondary)' }}>
-                    {CONDITION_FIELDS.find(f => f.value === c.field)?.label} {c.match === 'equals' ? 'is exactly' : 'contains'}
+                    {CONDITION_FIELDS.find(f => f.value === c.field)?.label} {MATCH_OPTIONS.find(m => m.value === c.match)?.label}
                   </span>{' '}
                   <span className="text-mono" style={{ fontWeight: 600 }}>"{c.value}"</span>
                 </div>
@@ -518,11 +522,11 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
                 }}>
                   {i > 0 && (
                     <div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2 }}>
-                      {c.sequence === 'immediately' ? 'immediately followed by' : 'any time later'}
+                      {c.sequence === 'immediately' ? 'immediately after' : c.sequence === 'next_session' ? 'in the next session' : 'any time later'}
                     </div>
                   )}
                   <span style={{ color: 'var(--text-secondary)' }}>
-                    {CONDITION_FIELDS.find(f => f.value === c.field)?.label} {c.match === 'equals' ? 'is exactly' : 'contains'}
+                    {CONDITION_FIELDS.find(f => f.value === c.field)?.label} {MATCH_OPTIONS.find(m => m.value === c.match)?.label}
                   </span>{' '}
                   <span className="text-mono" style={{ fontWeight: 600 }}>"{c.value}"</span>
                 </div>

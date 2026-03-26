@@ -303,7 +303,7 @@ def hive_count(hive_id: str):
 
     count = 0
     for uuid, evts in journeys.items():
-        if _journey_matches(evts, conditions):
+        if _journey_matches(_mark_entries(evts), conditions):
             count += 1
 
     return {"hive_id": hive_id, "count": count}
@@ -352,7 +352,7 @@ def journey_search(body: ConditionSearch):
 
     matching: list[str] = []
     for uid, evts in journeys.items():
-        if _journey_matches(evts, body.conditions):
+        if _journey_matches(_mark_entries(evts), body.conditions):
             matching.append(uid)
 
     total = len(matching)
@@ -387,12 +387,26 @@ def journey_search(body: ConditionSearch):
     }
 
 
+def _mark_entries(events: list[tuple]) -> list[tuple]:
+    """Append an is_entry bool (index 6) — True only for the very first page_view of the journey."""
+    first_done = False
+    result = []
+    for ev in events:
+        is_entry = not first_done and ev[2] == "page_view"
+        if is_entry:
+            first_done = True
+        result.append(ev + (is_entry,))
+    return result
+
+
 def _journey_matches(events: list[tuple], conditions: list[dict]) -> bool:
-    """Check if a visitor's event sequence matches all hive conditions in order."""
+    """Check if a visitor's event sequence matches all hive conditions in order.
+    events must be pre-processed by _mark_entries (index 6 = is_entry bool).
+    """
     if not conditions:
         return False
 
-    idx = 0  # current position in the event list
+    idx = 0
     prev_idx = -1
 
     for ci, cond in enumerate(conditions):
@@ -400,25 +414,64 @@ def _journey_matches(events: list[tuple], conditions: list[dict]) -> bool:
         match    = cond.get("match", "equals")
         value    = cond.get("value", "")
         sequence = cond.get("sequence", "anytime")
+        negate   = match in ("is_not", "does_not_contain")
+        contains = match in ("contains", "does_not_contain")
 
         start = idx if ci == 0 else (prev_idx + 1)
         found = False
 
         if sequence == "immediately" and ci > 0:
-            # Must be the very next event
             if start < len(events):
-                if _event_matches(events[start], field, match, value):
-                    prev_idx = start
-                    idx = start + 1
-                    found = True
+                prev_session = events[prev_idx][1]
+                candidate = events[start]
+                same_session = candidate[1] == prev_session
+                if same_session and _event_field_applies(candidate, field):
+                    hit = _event_matches(candidate, field, value, contains)
+                    if (not negate and hit) or (negate and not hit):
+                        prev_idx = start
+                        idx = start + 1
+                        found = True
+
+        elif sequence == "next_session" and ci > 0:
+            prev_session = events[prev_idx][1]
+            next_session_id = None
+            next_session_start = None
+            for i in range(prev_idx + 1, len(events)):
+                if events[i][1] != prev_session:
+                    next_session_id = events[i][1]
+                    next_session_start = i
+                    break
+            if next_session_id is not None:
+                last_i = next_session_start
+                for i in range(next_session_start, len(events)):
+                    if events[i][1] != next_session_id:
+                        break
+                    last_i = i
+                    if not _event_field_applies(events[i], field):
+                        continue
+                    hit = _event_matches(events[i], field, value)
+                    if (not negate and hit) or (negate and not hit):
+                        prev_idx = i
+                        idx = i + 1
+                        found = True
+                        break
+
         else:
             # "anytime" — scan forward
             for i in range(start, len(events)):
-                if _event_matches(events[i], field, match, value):
-                    prev_idx = i
-                    idx = i + 1
-                    found = True
-                    break
+                if negate:
+                    # Find first event of the right field type whose value doesn't match
+                    if _event_field_applies(events[i], field) and not _event_matches(events[i], field, value, contains):
+                        prev_idx = i
+                        idx = i + 1
+                        found = True
+                        break
+                else:
+                    if _event_field_applies(events[i], field) and _event_matches(events[i], field, value, contains):
+                        prev_idx = i
+                        idx = i + 1
+                        found = True
+                        break
 
         if not found:
             return False
@@ -426,18 +479,29 @@ def _journey_matches(events: list[tuple], conditions: list[dict]) -> bool:
     return True
 
 
-def _event_matches(event: tuple, field: str, match: str, value: str) -> bool:
-    """Check if a single event matches a condition.
-    event = (uuid, session_id, event_name, page_path, timestamp, properties)
-    """
+def _event_field_applies(event: tuple, field: str) -> bool:
+    """Returns True if this event is the right type for the given field."""
     event_name = event[2] or ""
-    page_path  = event[3] or ""
+    is_entry   = event[6] if len(event) > 6 else False
+    if field == "event_name":
+        return event_name != "page_view"
+    elif field in ("page_path", "page_referrer"):
+        return event_name == "page_view"
+    elif field == "entry_page":
+        return bool(is_entry)
+    return False
+
+
+def _event_matches(event: tuple, field: str, value: str, contains: bool = False) -> bool:
+    """Positive match only — check if the event's field value equals (or contains) value.
+    Call _event_field_applies first to confirm the event is the right type.
+    event = (uuid, session_id, event_name, page_path, timestamp, properties, is_entry)
+    """
+    page_path = event[3] or ""
 
     if field == "event_name":
-        if event_name == "page_view":
-            return False
-        target = event_name
-    elif field == "page_path":
+        target = event[2] or ""
+    elif field in ("page_path", "entry_page"):
         target = page_path
     elif field == "page_referrer":
         try:
@@ -448,8 +512,4 @@ def _event_matches(event: tuple, field: str, match: str, value: str) -> bool:
     else:
         return False
 
-    if match == "equals":
-        return target == value
-    elif match == "contains":
-        return value in target
-    return False
+    return (value in target) if contains else (target == value)
