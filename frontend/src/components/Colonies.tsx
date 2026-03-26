@@ -317,7 +317,14 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
       body: JSON.stringify({ name: colonyName.trim(), conditions, site_id: siteId || null }),
     })
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(h => { setColonies(prev => [h, ...prev]); setShowSaveModal(false); countAll([h.id], startDate, endDate); clearFilter() })
+      .then(h => {
+        setColonies(prev => [h, ...prev])
+        setShowSaveModal(false)
+        countAll([h.id], startDate, endDate)
+        clearFilter()
+        setExpandedColony(h.id)
+        fetchColonyUuids(h, 0, false)
+      })
       .catch(() => setSaveError('Failed to save'))
       .finally(() => setSaving(false))
   }
