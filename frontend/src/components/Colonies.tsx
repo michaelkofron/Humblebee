@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Journey, JourneyEvent, UuidRow, Hive, HiveCondition, HiveConditionField, HiveConditionMatch, HiveSequence } from '../types'
+import type { Journey, JourneyEvent, UuidRow, Hive, ConditionRow, ConditionStep, HiveConditionField, HiveConditionMatch, HiveSequence, StepOperator } from '../types'
 
 const PAGE_SIZE = 100
 
@@ -18,9 +18,9 @@ const MATCH_OPTIONS: { value: HiveConditionMatch; label: string }[] = [
 ]
 
 const SEQUENCE_OPTIONS: { value: HiveSequence; label: string }[] = [
-  { value: 'immediately',   label: 'immediately after' },
-  { value: 'next_session',  label: 'in the next session' },
-  { value: 'anytime',       label: 'any time later' },
+  { value: 'immediately',  label: 'immediately after' },
+  { value: 'next_session', label: 'in the next session' },
+  { value: 'anytime',      label: 'any time later' },
 ]
 
 function placeholderFor(field: HiveConditionField) {
@@ -31,13 +31,16 @@ function formatTs(ts: string) {
   return new Date(ts).toLocaleString()
 }
 
-function conditionSummary(conditions: HiveCondition[]): string {
-  return conditions.map((c, i) => {
-    const field = CONDITION_FIELDS.find(f => f.value === c.field)?.label ?? c.field
-    const match = MATCH_OPTIONS.find(m => m.value === c.match)?.label ?? c.match
-    const seq = SEQUENCE_OPTIONS.find(s => s.value === c.sequence)?.label ?? c.sequence
-    const part = `${field} ${match} "${c.value}"`
-    return i === 0 ? part : `${seq} ${part}`
+function stepsSummary(steps: ConditionStep[]): string {
+  return steps.map((step, si) => {
+    const rows = step.conditions.map(c => {
+      const field = CONDITION_FIELDS.find(f => f.value === c.field)?.label ?? c.field
+      const match = MATCH_OPTIONS.find(m => m.value === c.match)?.label ?? c.match
+      return `${field} ${match} "${c.value}"`
+    }).join(` ${step.operator.toUpperCase()} `)
+    if (si === 0) return rows
+    const seq = SEQUENCE_OPTIONS.find(s => s.value === step.sequence)?.label ?? step.sequence
+    return `${seq}: ${rows}`
   }).join(' · ')
 }
 
@@ -69,19 +72,29 @@ function groupBySession(events: JourneyEvent[]) {
   return groups
 }
 
-export default function Colonies({ siteId, siteName, startDate, endDate }: { siteId: string; siteName: string | null; startDate: string; endDate: string }) {
+const newRow = (): ConditionRow => ({ field: 'event_name', match: 'is', value: '' })
+const newStep = (sequence: HiveSequence = 'anytime'): ConditionStep => ({
+  sequence,
+  operator: 'and',
+  conditions: [newRow()],
+})
+
+export default function Colonies({ siteId, siteName, startDate, endDate }: {
+  siteId: string; siteName: string | null; startDate: string; endDate: string
+}) {
   // UUID search + list
   const [uuids, setUuids] = useState<UuidRow[]>([])
   const [totalUuids, setTotalUuids] = useState(0)
   const [uuidSearch, setUuidSearch] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
+  const [uuidsLoading, setUuidsLoading] = useState(true)
   const [journey, setJourney] = useState<Journey | null>(null)
   const [journeyLoading, setJourneyLoading] = useState(false)
   const [journeyError, setJourneyError] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
 
-  // Condition filter
-  const [conditions, setConditions] = useState<HiveCondition[]>([])
+  // Steps filter
+  const [steps, setSteps] = useState<ConditionStep[]>([])
   const [filterActive, setFilterActive] = useState(false)
   const [filterLoading, setFilterLoading] = useState(false)
 
@@ -100,8 +113,6 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
   const [colonyName, setColonyName] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-
-  const [uuidsLoading, setUuidsLoading] = useState(true)
 
   // ── Fetch UUIDs (default mode) ──────────────────────────────────────────
   const fetchUuids = useCallback((offset: number, append: boolean) => {
@@ -135,7 +146,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
     fetch('/api/journey/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conditions, site_id: siteId || null, limit: PAGE_SIZE, offset, start: startDate || null, end: endDate || null }),
+      body: JSON.stringify({ steps, site_id: siteId || null, limit: PAGE_SIZE, offset, start: startDate || null, end: endDate || null }),
     })
       .then(r => r.json())
       .then((data: { total: number; items: UuidRow[] }) => {
@@ -144,14 +155,16 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
       })
       .catch(() => { if (!append) setUuids([]) })
       .finally(() => { setFilterLoading(false); setLoadingMore(false) })
-  }, [conditions, siteId, startDate, endDate])
+  }, [steps, siteId, startDate, endDate])
+
+  const stepsValid = steps.length > 0 && steps.every(s => s.conditions.every(c => c.value.trim()))
 
   const applyFilter = useCallback(() => {
-    if (conditions.some(c => !c.value.trim())) return
+    if (!stepsValid) return
     setFilterActive(true)
     setJourney(null)
     fetchFiltered(0, false)
-  }, [conditions, fetchFiltered])
+  }, [stepsValid, fetchFiltered])
 
   // ── Infinite scroll ─────────────────────────────────────────────────────
   const handleScroll = useCallback(() => {
@@ -159,11 +172,8 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
     if (!el || loadingMore) return
     if (uuids.length >= totalUuids) return
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) {
-      if (filterActive) {
-        fetchFiltered(uuids.length, true)
-      } else {
-        fetchUuids(uuids.length, true)
-      }
+      if (filterActive) fetchFiltered(uuids.length, true)
+      else fetchUuids(uuids.length, true)
     }
   }, [loadingMore, uuids.length, totalUuids, filterActive, fetchFiltered, fetchUuids])
 
@@ -209,27 +219,50 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
       .catch(() => { setJourneyError('Failed to load journey'); setJourneyLoading(false) })
   }
 
-  // Condition actions
-  const addCondition = () => {
-    setConditions(prev => [...prev, { field: 'event_name', match: 'is', value: '', sequence: 'anytime' }])
+  // Step / condition management
+  const clearFilter = () => { setSteps([]); setFilterActive(false) }
+
+  const addStep = () => setSteps(prev => [...prev, newStep()])
+
+  const removeStep = (si: number) => {
+    const next = steps.filter((_, i) => i !== si)
+    setSteps(next)
+    if (next.length === 0) setFilterActive(false)
   }
 
-  const updateCondition = (i: number, patch: Partial<HiveCondition>) => {
-    setConditions(prev => prev.map((c, j) => j === i ? { ...c, ...patch } : c))
+  const addRowToStep = (si: number, operator: StepOperator) => {
+    setSteps(prev => prev.map((s, i) => i === si
+      ? { ...s, operator, conditions: [...s.conditions, newRow()] }
+      : s
+    ))
   }
 
-  const removeCondition = (i: number) => {
-    const next = conditions.filter((_, j) => j !== i)
-    setConditions(next)
-    if (next.length === 0) clearFilter()
+  const removeRowFromStep = (si: number, ci: number) => {
+    setSteps(prev => {
+      if (prev[si].conditions.length === 1) {
+        const next = prev.filter((_, i) => i !== si)
+        if (next.length === 0) setFilterActive(false)
+        return next
+      }
+      return prev.map((s, i) => i === si
+        ? { ...s, conditions: s.conditions.filter((_, j) => j !== ci) }
+        : s
+      )
+    })
   }
 
-  const clearFilter = () => {
-    setConditions([])
-    setFilterActive(false)
+  const updateRow = (si: number, ci: number, patch: Partial<ConditionRow>) => {
+    setSteps(prev => prev.map((s, i) => i === si
+      ? { ...s, conditions: s.conditions.map((c, j) => j === ci ? { ...c, ...patch } : c) }
+      : s
+    ))
   }
 
-  // Colony UUID fetch + accordion toggle
+  const updateStepSequence = (si: number, sequence: HiveSequence) => {
+    setSteps(prev => prev.map((s, i) => i === si ? { ...s, sequence } : s))
+  }
+
+  // Colony UUID fetch + accordion
   const fetchColonyUuids = useCallback((colony: Hive, offset: number, append: boolean) => {
     if (append) setColonyLoadingMore(true)
     else setColonyUuidLoading(prev => ({ ...prev, [colony.id]: true }))
@@ -237,7 +270,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        conditions: colony.conditions,
+        steps: colony.steps,
         site_id: colony.site_id || siteId || null,
         limit: PAGE_SIZE,
         offset,
@@ -279,7 +312,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
     }
   }, [colonyLoadingMore, expandedColony, colonies, colonyUuids, colonyCounts, fetchColonyUuids])
 
-  // Re-run filter + recount all colonies + refresh expanded colony UUIDs when dates change
+  // Re-run filter + recount + refresh colony UUIDs when dates change
   const prevDates = useRef({ startDate, endDate })
   useEffect(() => {
     const prev = prevDates.current
@@ -293,7 +326,6 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
     }
   }, [startDate, endDate, filterActive, colonies, countAll, expandedColony, fetchColonyUuids])
 
-  // Colony actions
   const countColony = (id: string) => countAll([id], startDate, endDate)
 
   const deleteColony = (id: string) => {
@@ -303,21 +335,15 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
       .catch(() => {})
   }
 
-  const openSaveModal = () => {
-    setColonyName('')
-    setSaveError('')
-    setShowSaveModal(true)
-  }
-
   const saveColony = () => {
     if (!colonyName.trim()) { setSaveError('Name is required'); return }
-    if (conditions.some(c => !c.value.trim())) { setSaveError('All conditions need a value'); return }
+    if (!stepsValid) { setSaveError('All conditions need a value'); return }
     setSaving(true)
     setSaveError('')
     fetch('/api/hives', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: colonyName.trim(), conditions, site_id: siteId || null }),
+      body: JSON.stringify({ name: colonyName.trim(), steps, site_id: siteId || null }),
     })
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(h => {
@@ -333,7 +359,6 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
   }
 
   const sessions = journey ? groupBySession(journey.events) : []
-
   const title = siteName ? `Colonies — ${siteName}` : 'Colonies — All Sites'
 
   return (
@@ -371,9 +396,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
             >
               <div>
                 <div className="text-mono" style={{ fontSize: 12 }}>{u.uuid}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {uuidSubline(u)}
-                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{uuidSubline(u)}</div>
               </div>
             </div>
           ))}
@@ -400,69 +423,113 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Colony creator</span>
           <div style={{ display: 'flex', gap: 6 }}>
-            {filterActive && conditions.length > 0 && (
-              <button className="btn btn-primary" onClick={openSaveModal} style={{ padding: '4px 12px', fontSize: 12 }}>
+            {filterActive && steps.length > 0 && (
+              <button className="btn btn-primary" onClick={() => { setColonyName(''); setSaveError(''); setShowSaveModal(true) }} style={{ padding: '4px 12px', fontSize: 12 }}>
                 Save as Colony
               </button>
             )}
-            {conditions.length === 0 && (
-              <button className="btn btn-ghost" onClick={addCondition} style={{ padding: '4px 10px', fontSize: 12 }}>
+            {steps.length === 0 && (
+              <button className="btn btn-ghost" onClick={() => setSteps([newStep()])} style={{ padding: '4px 10px', fontSize: 12 }}>
                 New Colony +
               </button>
             )}
           </div>
         </div>
-        {conditions.length > 0 && (
-          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {conditions.map((c, i) => (
-              <div key={i}>
-                {i > 0 && (
+
+        {steps.length > 0 && (
+          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {steps.map((step, si) => (
+              <div key={si}>
+                {/* Sequence selector between steps */}
+                {si > 0 && (
                   <select
                     className="select"
-                    value={c.sequence}
-                    onChange={e => updateCondition(i, { sequence: e.target.value as HiveSequence })}
-                    style={{ fontSize: 12, width: '100%', marginBottom: 6 }}
+                    value={step.sequence}
+                    onChange={e => updateStepSequence(si, e.target.value as HiveSequence)}
+                    style={{ fontSize: 12, width: '100%', marginBottom: 8 }}
                   >
                     {SEQUENCE_OPTIONS.map(o => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
                 )}
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <select
-                    className="select"
-                    value={c.field}
-                    onChange={e => updateCondition(i, { field: e.target.value as HiveConditionField })}
-                    style={{ fontSize: 12 }}
-                  >
-                    {CONDITION_FIELDS.map(f => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
-                  <select
-                    className="select"
-                    value={c.match}
-                    onChange={e => updateCondition(i, { match: e.target.value as HiveConditionMatch })}
-                    style={{ fontSize: 12 }}
-                  >
-                    {MATCH_OPTIONS.map(m => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
-                  <input
-                    className="input"
-                    placeholder={placeholderFor(c.field)}
-                    value={c.value}
-                    onChange={e => updateCondition(i, { value: e.target.value })}
-                    onKeyDown={e => e.key === 'Enter' && applyFilter()}
-                    style={{ flex: 1, fontSize: 12, minWidth: 0 }}
-                  />
-                  <button className="btn btn-ghost" onClick={() => removeCondition(i)} style={{ padding: '4px 8px', fontSize: 12 }}>✕</button>
+
+                {/* Step group */}
+                <div style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: 10,
+                  background: 'var(--surface-raised)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0,
+                }}>
+                  {step.conditions.map((row, ci) => (
+                    <div key={ci}>
+                      {/* AND / OR label between rows */}
+                      {ci > 0 && (
+                        <div style={{
+                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                          color: step.operator === 'and' ? 'var(--primary)' : 'var(--text-muted)',
+                          padding: '4px 0',
+                          letterSpacing: '0.06em',
+                        }}>
+                          {step.operator}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <select
+                          className="select"
+                          value={row.field}
+                          onChange={e => updateRow(si, ci, { field: e.target.value as HiveConditionField })}
+                          style={{ fontSize: 12 }}
+                        >
+                          {CONDITION_FIELDS.map(f => (
+                            <option key={f.value} value={f.value}>{f.label}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="select"
+                          value={row.match}
+                          onChange={e => updateRow(si, ci, { match: e.target.value as HiveConditionMatch })}
+                          style={{ fontSize: 12 }}
+                        >
+                          {MATCH_OPTIONS.map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                        <input
+                          className="input"
+                          placeholder={placeholderFor(row.field)}
+                          value={row.value}
+                          onChange={e => updateRow(si, ci, { value: e.target.value })}
+                          onKeyDown={e => e.key === 'Enter' && applyFilter()}
+                          style={{ flex: 1, fontSize: 12, minWidth: 0 }}
+                        />
+                        <button className="btn btn-ghost" onClick={() => removeRowFromStep(si, ci)} style={{ padding: '4px 8px', fontSize: 12 }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* + AND / + OR */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-ghost" onClick={() => addRowToStep(si, 'and')} style={{ fontSize: 11, padding: '3px 8px' }}>+ AND</button>
+                      <button className="btn btn-ghost" onClick={() => addRowToStep(si, 'or')} style={{ fontSize: 11, padding: '3px 8px' }}>+ OR</button>
+                    </div>
+                    {steps.length > 1 && (
+                      <button className="btn btn-ghost" onClick={() => removeStep(si)} style={{ fontSize: 11, padding: '3px 8px', color: 'var(--error)' }}>
+                        Remove step
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between' }}>
-              <button className="btn btn-ghost" onClick={addCondition} style={{ padding: '4px 10px', fontSize: 12 }}>+ Add</button>
+
+            {/* Bottom row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button className="btn btn-ghost" onClick={addStep} style={{ fontSize: 12, padding: '4px 10px' }}>+ Add step</button>
               <div style={{ display: 'flex', gap: 6 }}>
                 {filterActive && (
                   <button className="btn btn-ghost" onClick={clearFilter} style={{ padding: '4px 10px', fontSize: 12 }}>Clear</button>
@@ -470,7 +537,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
                 <button
                   className="btn btn-primary"
                   onClick={applyFilter}
-                  disabled={filterLoading || conditions.some(c => !c.value.trim())}
+                  disabled={filterLoading || !stepsValid}
                   style={{ padding: '4px 12px', fontSize: 12 }}
                 >
                   {filterLoading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Search'}
@@ -565,12 +632,10 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
           const count = colonyCounts[h.id]
           return (
             <div key={h.id} className="card" style={{ marginBottom: 12, overflow: 'hidden' }}>
-              {/* Header — clickable to expand */}
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => toggleColony(h)}
               >
-                {/* Toggle icon */}
                 <div style={{
                   width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderRadius: 4, flexShrink: 0, fontSize: 10,
@@ -579,8 +644,6 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
                 }}>
                   {uuidLoading ? '…' : isOpen ? '▼' : '▶'}
                 </div>
-
-                {/* Name + summary */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 600, fontSize: 13 }}>{h.name}</span>
@@ -593,11 +656,9 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {conditionSummary(h.conditions)}
+                    {stepsSummary(h.steps)}
                   </div>
                 </div>
-
-                {/* Actions */}
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                   <button className="btn" onClick={() => countColony(h.id)} disabled={countLoading[h.id]} style={{ fontSize: 12, padding: '4px 10px' }}>
                     Recount
@@ -606,7 +667,6 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
                 </div>
               </div>
 
-              {/* Expanded UUID list */}
               {isOpen && (
                 <div style={{ borderTop: '1px solid var(--border)' }}>
                   {uuidLoading ? (
@@ -626,9 +686,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
                         >
                           <div>
                             <div className="text-mono" style={{ fontSize: 12 }}>{u.uuid}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                              {uuidSubline(u)}
-                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{uuidSubline(u)}</div>
                           </div>
                         </div>
                       ))}
@@ -664,25 +722,29 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: { sit
               />
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Conditions</label>
-              {conditions.map((c, i) => (
-                <div key={i} style={{
-                  background: 'var(--surface-raised)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '8px 12px',
-                  marginBottom: 6,
-                  fontSize: 12,
-                }}>
-                  {i > 0 && (
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 2 }}>
-                      {c.sequence === 'immediately' ? 'immediately after' : c.sequence === 'next_session' ? 'in the next session' : 'any time later'}
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Steps</label>
+              {steps.map((step, si) => (
+                <div key={si} style={{ marginBottom: 8 }}>
+                  {si > 0 && (
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', margin: '4px 0' }}>
+                      {SEQUENCE_OPTIONS.find(s => s.value === step.sequence)?.label}
                     </div>
                   )}
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    {CONDITION_FIELDS.find(f => f.value === c.field)?.label} {MATCH_OPTIONS.find(m => m.value === c.match)?.label}
-                  </span>{' '}
-                  <span className="text-mono" style={{ fontWeight: 600 }}>"{c.value}"</span>
+                  <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', background: 'var(--surface-raised)', fontSize: 12 }}>
+                    {step.conditions.map((c, ci) => (
+                      <div key={ci}>
+                        {ci > 0 && (
+                          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--primary)', padding: '2px 0' }}>
+                            {step.operator}
+                          </div>
+                        )}
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          {CONDITION_FIELDS.find(f => f.value === c.field)?.label} {MATCH_OPTIONS.find(m => m.value === c.match)?.label}
+                        </span>{' '}
+                        <span className="text-mono" style={{ fontWeight: 600 }}>"{c.value}"</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

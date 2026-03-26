@@ -35,8 +35,22 @@ def db():
 
 @app.on_event("startup")
 def startup():
-    # Run migrations/table creation once on the main thread.
     init_db()
+    # Migration: clear colonies saved in the old flat-conditions format
+    import duckdb as _duckdb
+    con = _duckdb.connect(str(DB_PATH))
+    try:
+        done = con.execute("SELECT 1 FROM migrations WHERE version = 2").fetchone()
+    except Exception:
+        done = None
+    if not done:
+        con.execute("DELETE FROM hives")
+        try:
+            con.execute("INSERT INTO migrations VALUES (2)")
+        except Exception:
+            con.execute("CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY)")
+            con.execute("INSERT INTO migrations VALUES (2)")
+    con.close()
     print("Humblebee: database initialised.")
 
 
@@ -287,7 +301,7 @@ def get_journey(visitor_uuid: str, site_id: str | None = None):
 
 class HiveCreate(BaseModel):
     name: str
-    conditions: list[dict]
+    steps: list[dict]
     site_id: str | None = None
 
 
@@ -305,7 +319,7 @@ def list_hives(site_id: str | None = None):
     return [
         {
             "id": r[0], "name": r[1], "site_id": r[2],
-            "conditions": json.loads(r[3]),
+            "steps": json.loads(r[3]),
             "created_at": str(r[4]), "updated_at": str(r[5]),
         }
         for r in rows
@@ -316,17 +330,17 @@ def list_hives(site_id: str | None = None):
 def create_hive(body: HiveCreate):
     if not body.name.strip():
         raise HTTPException(400, "Name is required")
-    if not body.conditions:
-        raise HTTPException(400, "At least one condition is required")
+    if not body.steps:
+        raise HTTPException(400, "At least one step is required")
 
     hive_id = str(_uuid.uuid4())
     now = datetime.now().isoformat()
     db().execute(
         "INSERT INTO hives (id, name, site_id, conditions, created_at, updated_at) VALUES (?,?,?,?,?,?)",
-        [hive_id, body.name.strip(), body.site_id or None, json.dumps(body.conditions), now, now],
+        [hive_id, body.name.strip(), body.site_id or None, json.dumps(body.steps), now, now],
     )
     return {"id": hive_id, "name": body.name.strip(), "site_id": body.site_id or None,
-            "conditions": body.conditions, "created_at": now, "updated_at": now}
+            "steps": body.steps, "created_at": now, "updated_at": now}
 
 
 @app.delete("/api/hives/{hive_id}")
@@ -347,7 +361,7 @@ def hive_count(
     row = db().execute("SELECT conditions, site_id FROM hives WHERE id = ?", [hive_id]).fetchone()
     if not row:
         raise HTTPException(404, "Hive not found")
-    conditions = json.loads(row[0])
+    steps = json.loads(row[0])
     hive_site_id = row[1]
 
     filters = []
@@ -381,14 +395,14 @@ def hive_count(
 
     count = 0
     for uuid, evts in journeys.items():
-        if _journey_matches(_mark_entries(evts), conditions):
+        if _journey_matches(evts, steps):
             count += 1
 
     return {"hive_id": hive_id, "count": count}
 
 
 class ConditionSearch(BaseModel):
-    conditions: list[dict]
+    steps: list[dict]
     site_id: str | None = None
     limit: int = 100
     offset: int = 0
@@ -398,8 +412,8 @@ class ConditionSearch(BaseModel):
 
 @app.post("/api/journey/search")
 def journey_search(body: ConditionSearch):
-    if not body.conditions:
-        raise HTTPException(400, "At least one condition is required")
+    if not body.steps:
+        raise HTTPException(400, "At least one step is required")
 
     filters = []
     params: list = []
@@ -430,7 +444,7 @@ def journey_search(body: ConditionSearch):
 
     matching: list[str] = []
     for uid, evts in journeys.items():
-        if _journey_matches(_mark_entries(evts), body.conditions):
+        if _journey_matches(evts, body.steps):
             matching.append(uid)
 
     total = len(matching)
@@ -464,7 +478,7 @@ def journey_search(body: ConditionSearch):
 
 
 def _mark_entries(events: list[tuple]) -> list[tuple]:
-    """Append an is_entry bool (index 6) — True only for the very first page_view of the journey."""
+    """Append is_entry bool (index 6) — True only for the very first page_view."""
     first_done = False
     result = []
     for ev in events:
@@ -475,82 +489,86 @@ def _mark_entries(events: list[tuple]) -> list[tuple]:
     return result
 
 
-def _journey_matches(events: list[tuple], conditions: list[dict]) -> bool:
-    """Check if a visitor's event sequence matches all hive conditions in order.
-    events must be pre-processed by _mark_entries (index 6 = is_entry bool).
+def _find_in_range(events: list[tuple], row: dict, start: int, session: str | None = None) -> int | None:
+    """Return the index of the first event from `start` matching the condition row.
+    If session is set, stop searching when the session changes.
     """
-    if not conditions:
+    field   = row.get("field", "event_name")
+    match   = row.get("match", "is")
+    value   = row.get("value", "")
+    negate  = match in ("is_not", "does_not_contain")
+    contains = match in ("contains", "does_not_contain")
+
+    for i in range(start, len(events)):
+        if session is not None and events[i][1] != session:
+            break
+        if not _event_field_applies(events[i], field):
+            continue
+        hit = _event_matches(events[i], field, value, contains)
+        if (not negate and hit) or (negate and not hit):
+            return i
+    return None
+
+
+def _journey_matches(events: list[tuple], steps: list[dict]) -> bool:
+    """Check if a visitor's journey satisfies all steps in order.
+    Each step has: sequence, operator ('and'|'or'), conditions (list of rows).
+    """
+    if not steps:
         return False
 
-    idx = 0
+    events = _mark_entries(events)
     prev_idx = -1
 
-    for ci, cond in enumerate(conditions):
-        field    = cond.get("field", "event_name")
-        match    = cond.get("match", "equals")
-        value    = cond.get("value", "")
-        sequence = cond.get("sequence", "anytime")
-        negate   = match in ("is_not", "does_not_contain")
-        contains = match in ("contains", "does_not_contain")
+    for si, step in enumerate(steps):
+        sequence   = step.get("sequence", "anytime")
+        operator   = step.get("operator", "and")
+        conditions = step.get("conditions", [])
 
-        start = idx if ci == 0 else (prev_idx + 1)
-        found = False
-
-        if sequence == "immediately" and ci > 0:
-            if start < len(events):
-                prev_session = events[prev_idx][1]
-                candidate = events[start]
-                same_session = candidate[1] == prev_session
-                if same_session and _event_field_applies(candidate, field):
-                    hit = _event_matches(candidate, field, value, contains)
-                    if (not negate and hit) or (negate and not hit):
-                        prev_idx = start
-                        idx = start + 1
-                        found = True
-
-        elif sequence == "next_session" and ci > 0:
-            prev_session = events[prev_idx][1]
-            next_session_id = None
-            next_session_start = None
-            for i in range(prev_idx + 1, len(events)):
-                if events[i][1] != prev_session:
-                    next_session_id = events[i][1]
-                    next_session_start = i
-                    break
-            if next_session_id is not None:
-                last_i = next_session_start
-                for i in range(next_session_start, len(events)):
-                    if events[i][1] != next_session_id:
-                        break
-                    last_i = i
-                    if not _event_field_applies(events[i], field):
-                        continue
-                    hit = _event_matches(events[i], field, value)
-                    if (not negate and hit) or (negate and not hit):
-                        prev_idx = i
-                        idx = i + 1
-                        found = True
-                        break
-
-        else:
-            # "anytime" — scan forward
-            for i in range(start, len(events)):
-                if negate:
-                    # Find first event of the right field type whose value doesn't match
-                    if _event_field_applies(events[i], field) and not _event_matches(events[i], field, value, contains):
-                        prev_idx = i
-                        idx = i + 1
-                        found = True
-                        break
-                else:
-                    if _event_field_applies(events[i], field) and _event_matches(events[i], field, value, contains):
-                        prev_idx = i
-                        idx = i + 1
-                        found = True
-                        break
-
-        if not found:
+        if not conditions:
             return False
+
+        search_start = 0 if si == 0 else prev_idx + 1
+        session: str | None = None
+
+        if si > 0:
+            if sequence == "immediately":
+                if prev_idx < 0 or prev_idx >= len(events):
+                    return False
+                session = events[prev_idx][1]  # same session only
+            elif sequence == "next_session":
+                if prev_idx < 0:
+                    return False
+                cur_session = events[prev_idx][1]
+                next_start = next(
+                    (i for i in range(prev_idx + 1, len(events)) if events[i][1] != cur_session),
+                    None,
+                )
+                if next_start is None:
+                    return False
+                search_start = next_start
+                session = events[next_start][1]
+
+        if operator == "and":
+            cur = search_start
+            last = prev_idx
+            for row in conditions:
+                idx = _find_in_range(events, row, cur, session)
+                if idx is None:
+                    return False
+                last = idx
+                cur = idx + 1
+            prev_idx = last
+
+        else:  # or — any one condition is enough; take the earliest match
+            best: int | None = None
+            for row in conditions:
+                idx = _find_in_range(events, row, search_start, session)
+                if idx is not None and (best is None or idx < best):
+                    best = idx
+            if best is None:
+                return False
+            prev_idx = best
 
     return True
 

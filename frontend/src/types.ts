@@ -45,19 +45,25 @@ export interface UuidRow {
 export type HiveConditionField = 'event_name' | 'page_path' | 'page_referrer' | 'entry_page'
 export type HiveConditionMatch = 'is' | 'is_not' | 'contains' | 'does_not_contain'
 export type HiveSequence = 'anytime' | 'immediately' | 'next_session'
+export type StepOperator = 'and' | 'or'
 
-export interface HiveCondition {
+export interface ConditionRow {
   field: HiveConditionField
   match: HiveConditionMatch
   value: string
-  sequence: HiveSequence
+}
+
+export interface ConditionStep {
+  sequence: HiveSequence      // how this step relates to the previous step (ignored for first)
+  operator: StepOperator      // how conditions within this step are combined
+  conditions: ConditionRow[]
 }
 
 export interface Hive {
   id: string
   name: string
   site_id: string | null
-  conditions: HiveCondition[]
+  steps: ConditionStep[]
   created_at: string
   updated_at: string
 }
