@@ -134,12 +134,34 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
     }
   }, [loadingMore, uuids.length, totalUuids, filterActive, fetchFiltered, fetchUuids])
 
-  // Load saved colonies
-  const loadColonies = () => {
+  // Count all colonies with current date range
+  const countAll = useCallback((ids: string[], sd: string, ed: string) => {
+    ids.forEach(id => {
+      setCountLoading(prev => ({ ...prev, [id]: true }))
+      const p = new URLSearchParams()
+      if (sd) p.set('start', sd)
+      if (ed) p.set('end', ed)
+      fetch(`/api/hives/${id}/count?${p}`)
+        .then(r => r.json())
+        .then(d => setColonyCounts(prev => ({ ...prev, [id]: d.count })))
+        .catch(() => {})
+        .finally(() => setCountLoading(prev => ({ ...prev, [id]: false })))
+    })
+  }, [])
+
+  // Load saved colonies and immediately count them
+  const loadColonies = useCallback(() => {
     const p = new URLSearchParams()
     if (siteId) p.set('site_id', siteId)
-    fetch(`/api/hives?${p}`).then(r => r.json()).then(setColonies).catch(() => {})
-  }
+    fetch(`/api/hives?${p}`)
+      .then(r => r.json())
+      .then((hives: Hive[]) => {
+        setColonies(hives)
+        countAll(hives.map(h => h.id), startDate, endDate)
+      })
+      .catch(() => {})
+  }, [siteId, startDate, endDate, countAll])
+
   useEffect(loadColonies, [siteId])
 
   // Journey lookup
@@ -174,28 +196,18 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
     setFilterActive(false)
   }
 
-  // Re-run filter when dates change if a filter is already active
+  // Re-run filter + recount all colonies when dates change
   const prevDates = useRef({ startDate, endDate })
   useEffect(() => {
     const prev = prevDates.current
     prevDates.current = { startDate, endDate }
-    if (filterActive && (prev.startDate !== startDate || prev.endDate !== endDate)) {
-      fetchFiltered(0, false)
-    }
-  }, [startDate, endDate, filterActive])
+    if (prev.startDate === startDate && prev.endDate === endDate) return
+    if (filterActive) fetchFiltered(0, false)
+    if (colonies.length > 0) countAll(colonies.map(h => h.id), startDate, endDate)
+  }, [startDate, endDate, filterActive, colonies, countAll])
 
   // Colony actions
-  const countColony = (id: string) => {
-    setCountLoading(prev => ({ ...prev, [id]: true }))
-    const p = new URLSearchParams()
-    if (startDate) p.set('start', startDate)
-    if (endDate) p.set('end', endDate)
-    fetch(`/api/hives/${id}/count?${p}`)
-      .then(r => r.json())
-      .then(d => setColonyCounts(prev => ({ ...prev, [id]: d.count })))
-      .catch(() => {})
-      .finally(() => setCountLoading(prev => ({ ...prev, [id]: false })))
-  }
+  const countColony = (id: string) => countAll([id], startDate, endDate)
 
   const deleteColony = (id: string) => {
     if (!confirm('Delete this colony?')) return
@@ -221,7 +233,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
       body: JSON.stringify({ name: colonyName.trim(), conditions, site_id: siteId || null }),
     })
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(h => { setColonies(prev => [h, ...prev]); setShowSaveModal(false) })
+      .then(h => { setColonies(prev => [h, ...prev]); setShowSaveModal(false); countAll([h.id], startDate, endDate) })
       .catch(() => setSaveError('Failed to save'))
       .finally(() => setSaving(false))
   }
