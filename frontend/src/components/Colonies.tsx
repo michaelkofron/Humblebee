@@ -69,7 +69,7 @@ function groupBySession(events: JourneyEvent[]) {
   return groups
 }
 
-export default function Colonies({ siteId, startDate, endDate }: { siteId: string; startDate: string; endDate: string }) {
+export default function Colonies({ siteId, siteName, startDate, endDate }: { siteId: string; siteName: string | null; startDate: string; endDate: string }) {
   // UUID search + list
   const [uuids, setUuids] = useState<UuidRow[]>([])
   const [totalUuids, setTotalUuids] = useState(0)
@@ -101,10 +101,13 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  const [uuidsLoading, setUuidsLoading] = useState(true)
+
   // ── Fetch UUIDs (default mode) ──────────────────────────────────────────
   const fetchUuids = useCallback((offset: number, append: boolean) => {
     if (filterActive) return
     if (append) setLoadingMore(true)
+    else setUuidsLoading(true)
     const p = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) })
     if (siteId) p.set('site_id', siteId)
     if (uuidSearch) p.set('q', uuidSearch)
@@ -117,7 +120,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
         setUuids(prev => append ? [...prev, ...data.items] : data.items)
       })
       .catch(() => {})
-      .finally(() => setLoadingMore(false))
+      .finally(() => { setLoadingMore(false); setUuidsLoading(false) })
   }, [siteId, uuidSearch, filterActive, startDate, endDate])
 
   useEffect(() => {
@@ -331,8 +334,14 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
 
   const sessions = journey ? groupBySession(journey.events) : []
 
+  const title = siteName ? `Colonies — ${siteName}` : 'Colonies — All Sites'
+
   return (
     <>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700 }}>{title}</h2>
+      </div>
+
       {/* Search + UUID list */}
       <div className="card" style={{ marginBottom: 16, overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -373,7 +382,12 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
               <span className="spinner" style={{ width: 16, height: 16 }} />
             </div>
           )}
-          {uuids.length === 0 && !filterLoading && (
+          {uuids.length === 0 && (uuidsLoading || filterLoading) && (
+            <div style={{ padding: 20, textAlign: 'center' }}>
+              <span className="spinner" style={{ width: 16, height: 16 }} />
+            </div>
+          )}
+          {uuids.length === 0 && !uuidsLoading && !filterLoading && (
             <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
               {filterActive ? 'No matches' : 'No visitors'}
             </div>
@@ -538,7 +552,7 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
 
       {/* Saved colonies */}
       <div style={{ marginTop: 32 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Saved Colonies</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>🍯 Saved Colonies</h3>
         {colonies.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
             🍯 No colonies yet — use the filter above and save one
