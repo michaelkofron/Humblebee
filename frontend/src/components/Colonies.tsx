@@ -31,6 +31,16 @@ function formatTs(ts: string) {
   return new Date(ts).toLocaleString()
 }
 
+function conditionSummary(conditions: HiveCondition[]): string {
+  return conditions.map((c, i) => {
+    const field = CONDITION_FIELDS.find(f => f.value === c.field)?.label ?? c.field
+    const match = MATCH_OPTIONS.find(m => m.value === c.match)?.label ?? c.match
+    const seq = SEQUENCE_OPTIONS.find(s => s.value === c.sequence)?.label ?? c.sequence
+    const part = `${field} ${match} "${c.value}"`
+    return i === 0 ? part : `${seq} ${part}`
+  }).join(' · ')
+}
+
 function groupBySession(events: JourneyEvent[]) {
   const groups: { session_id: string; events: JourneyEvent[] }[] = []
   let current: typeof groups[number] | null = null
@@ -64,6 +74,9 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
   const [colonies, setColonies] = useState<Hive[]>([])
   const [colonyCounts, setColonyCounts] = useState<Record<string, number>>({})
   const [countLoading, setCountLoading] = useState<Record<string, boolean>>({})
+  const [expandedColony, setExpandedColony] = useState<string | null>(null)
+  const [colonyUuids, setColonyUuids] = useState<Record<string, UuidRow[]>>({})
+  const [colonyUuidLoading, setColonyUuidLoading] = useState<Record<string, boolean>>({})
 
   // Save modal
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -196,7 +209,40 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
     setFilterActive(false)
   }
 
-  // Re-run filter + recount all colonies when dates change
+  // Colony UUID fetch + accordion toggle
+  const fetchColonyUuids = useCallback((colony: Hive) => {
+    setColonyUuidLoading(prev => ({ ...prev, [colony.id]: true }))
+    fetch('/api/journey/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conditions: colony.conditions,
+        site_id: colony.site_id || siteId || null,
+        limit: PAGE_SIZE,
+        offset: 0,
+        start: startDate || null,
+        end: endDate || null,
+      }),
+    })
+      .then(r => r.json())
+      .then((data: { total: number; items: UuidRow[] }) => {
+        setColonyUuids(prev => ({ ...prev, [colony.id]: data.items }))
+        setColonyCounts(prev => ({ ...prev, [colony.id]: data.total }))
+      })
+      .catch(() => {})
+      .finally(() => setColonyUuidLoading(prev => ({ ...prev, [colony.id]: false })))
+  }, [siteId, startDate, endDate])
+
+  const toggleColony = (colony: Hive) => {
+    if (expandedColony === colony.id) {
+      setExpandedColony(null)
+    } else {
+      setExpandedColony(colony.id)
+      fetchColonyUuids(colony)
+    }
+  }
+
+  // Re-run filter + recount all colonies + refresh expanded colony UUIDs when dates change
   const prevDates = useRef({ startDate, endDate })
   useEffect(() => {
     const prev = prevDates.current
@@ -204,7 +250,11 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
     if (prev.startDate === startDate && prev.endDate === endDate) return
     if (filterActive) fetchFiltered(0, false)
     if (colonies.length > 0) countAll(colonies.map(h => h.id), startDate, endDate)
-  }, [startDate, endDate, filterActive, colonies, countAll])
+    if (expandedColony) {
+      const colony = colonies.find(h => h.id === expandedColony)
+      if (colony) fetchColonyUuids(colony)
+    }
+  }, [startDate, endDate, filterActive, colonies, countAll, expandedColony, fetchColonyUuids])
 
   // Colony actions
   const countColony = (id: string) => countAll([id], startDate, endDate)
@@ -236,13 +286,6 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
       .then(h => { setColonies(prev => [h, ...prev]); setShowSaveModal(false); countAll([h.id], startDate, endDate) })
       .catch(() => setSaveError('Failed to save'))
       .finally(() => setSaving(false))
-  }
-
-  // Load a colony's conditions into the filter
-  const loadColonyFilter = (colony: Hive) => {
-    setConditions(colony.conditions)
-    setFilterActive(true)
-    setJourney(null)
   }
 
   const sessions = journey ? groupBySession(journey.events) : []
@@ -460,51 +503,87 @@ export default function Colonies({ siteId, startDate, endDate }: { siteId: strin
             🍯 No colonies yet — use the filter above and save one
           </div>
         )}
-        {colonies.map(h => (
-          <div key={h.id} className="card" style={{ marginBottom: 12 }}>
-            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span>{h.name}</span>
-                <span className="badge-amber">{h.conditions.length} condition{h.conditions.length !== 1 ? 's' : ''}</span>
-                {colonyCounts[h.id] !== undefined && (
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 400 }}>
-                    {colonyCounts[h.id].toLocaleString()} visitor{colonyCounts[h.id] !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button className="btn" onClick={() => loadColonyFilter(h)} style={{ fontSize: 12, padding: '4px 10px' }}>
-                  Load
-                </button>
-                <button className="btn" onClick={() => countColony(h.id)} disabled={countLoading[h.id]} style={{ fontSize: 12, padding: '4px 10px' }}>
-                  {countLoading[h.id] ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Count'}
-                </button>
-                <button className="btn btn-danger" onClick={() => deleteColony(h.id)} style={{ fontSize: 12, padding: '4px 10px' }}>Delete</button>
-              </div>
-            </div>
-            <div className="card-body" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {h.conditions.map((c, i) => (
-                <div key={i} style={{
-                  background: 'var(--surface-raised)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '6px 10px',
-                  fontSize: 12,
+        {colonies.map(h => {
+          const isOpen = expandedColony === h.id
+          const uuidList = colonyUuids[h.id] ?? []
+          const uuidLoading = colonyUuidLoading[h.id] ?? false
+          const count = colonyCounts[h.id]
+          return (
+            <div key={h.id} className="card" style={{ marginBottom: 12, overflow: 'hidden' }}>
+              {/* Header — clickable to expand */}
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => toggleColony(h)}
+              >
+                {/* Toggle icon */}
+                <div style={{
+                  width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 4, flexShrink: 0, fontSize: 10,
+                  background: isOpen ? 'var(--primary-light)' : '#f1f5f9',
+                  color: isOpen ? 'var(--primary)' : 'var(--text-muted)',
                 }}>
-                  {i > 0 && (
-                    <span style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>
-                      {c.sequence === 'immediately' ? 'immediately after' : c.sequence === 'next_session' ? 'next session' : 'any time later'}
-                    </span>
-                  )}
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    {CONDITION_FIELDS.find(f => f.value === c.field)?.label} {MATCH_OPTIONS.find(m => m.value === c.match)?.label}
-                  </span>{' '}
-                  <span className="text-mono" style={{ fontWeight: 600 }}>"{c.value}"</span>
+                  {uuidLoading ? '…' : isOpen ? '▼' : '▶'}
                 </div>
-              ))}
+
+                {/* Name + summary */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{h.name}</span>
+                    {count !== undefined && (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>
+                        {countLoading[h.id]
+                          ? <span className="spinner" style={{ width: 12, height: 12, display: 'inline-block' }} />
+                          : `${count.toLocaleString()} visitor${count !== 1 ? 's' : ''}`}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {conditionSummary(h.conditions)}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                  <button className="btn" onClick={() => countColony(h.id)} disabled={countLoading[h.id]} style={{ fontSize: 12, padding: '4px 10px' }}>
+                    Recount
+                  </button>
+                  <button className="btn btn-danger" onClick={() => deleteColony(h.id)} style={{ fontSize: 12, padding: '4px 10px' }}>Delete</button>
+                </div>
+              </div>
+
+              {/* Expanded UUID list */}
+              {isOpen && (
+                <div style={{ borderTop: '1px solid var(--border)' }}>
+                  {uuidLoading ? (
+                    <div style={{ padding: 20, textAlign: 'center' }}>
+                      <span className="spinner" style={{ width: 16, height: 16 }} />
+                    </div>
+                  ) : uuidList.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No matches</div>
+                  ) : (
+                    <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                      {uuidList.map(u => (
+                        <div
+                          key={u.uuid + u.site_id}
+                          className={`uuid-list-item${journey?.uuid === u.uuid ? ' active' : ''}`}
+                          onClick={() => loadJourney(u.uuid)}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        >
+                          <div>
+                            <div className="text-mono" style={{ fontSize: 12 }}>{u.uuid}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                              {u.site_name} · {formatTs(u.last_seen)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Save modal */}
