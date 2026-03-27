@@ -35,10 +35,10 @@ function groupBySession(events: JourneyEvent[]) {
   return groups
 }
 
-function VennDiagram({ a, b, overlap, uid }: {
-  a: number; b: number; overlap: number; uid: string
+function VennDiagram({ a, b, overlap, nameA, nameB, uid }: {
+  a: number; b: number; overlap: number; nameA: string; nameB: string; uid: string
 }) {
-  const VW = 500, VH = 220, CY = VH / 2
+  const VW = 500, VH = 250, CY = 115
   const MAX_R = 88, MIN_R = 40
   const maxCount = Math.max(a, b, 1)
   const ra = MIN_R + (MAX_R - MIN_R) * Math.sqrt(a / maxCount)
@@ -48,6 +48,8 @@ function VennDiagram({ a, b, overlap, uid }: {
   const cxa = VW / 2 - dist / 2
   const cxb = VW / 2 + dist / 2
   const clipId = `venn-clip-${uid}`
+  const labelY = CY + MAX_R + 22
+  const truncate = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + '…' : s
 
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" style={{ display: 'block' }} preserveAspectRatio="xMidYMid meet">
@@ -64,6 +66,13 @@ function VennDiagram({ a, b, overlap, uid }: {
       {overlapRatio > 0 && (
         <circle cx={cxb} cy={CY} r={rb} fill="#f59e0b" fillOpacity={0.55} stroke="none" clipPath={`url(#${clipId})`} />
       )}
+      {/* Colony name labels */}
+      <text x={cxa} y={labelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="var(--text-secondary)">
+        {truncate(nameA, 20)}
+      </text>
+      <text x={cxb} y={labelY} textAnchor="middle" fontSize={13} fontWeight={600} fill="var(--text-secondary)">
+        {truncate(nameB, 20)}
+      </text>
     </svg>
   )
 }
@@ -370,11 +379,11 @@ export default function Pollinate({ siteId, siteName, startDate, endDate }: {
                       <div style={{ padding: '20px 16px 16px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
                         {/* Responsive Venn */}
                         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-                          <VennDiagram a={c.a_count} b={c.b_count} overlap={c.overlap} uid={pol.id} />
+                          <VennDiagram a={c.a_count} b={c.b_count} overlap={c.overlap} nameA={nameA} nameB={nameB} uid={pol.id} />
                         </div>
 
                         {/* Stats panel */}
-                        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200 }}>
+                        <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {/* Colony A */}
                           <div style={{ padding: '10px 14px', background: 'var(--surface-raised)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
@@ -476,6 +485,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate }: {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginRight: 4 }}>bee_id:</span>
                     <span className="text-mono" style={{ fontSize: 13 }}>{journey.uuid}</span>
                     <span style={{ color: 'var(--text-muted)', marginLeft: 10, fontSize: 13 }}>{journey.events.length} events</span>
                   </div>

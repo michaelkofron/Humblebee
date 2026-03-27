@@ -423,7 +423,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             className="input"
-            placeholder="Search UUIDs..."
+            placeholder="Search bee_ids..."
             value={uuidSearch}
             onChange={e => setUuidSearch(e.target.value)}
             style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }}
@@ -630,6 +630,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <div>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginRight: 4 }}>bee_id:</span>
                     <span className="text-mono" style={{ fontSize: 13 }}>{journey.uuid}</span>
                     <span style={{ color: 'var(--text-muted)', marginLeft: 10, fontSize: 13 }}>{journey.events.length} events</span>
                   </div>
