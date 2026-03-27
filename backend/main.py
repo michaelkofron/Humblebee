@@ -113,6 +113,9 @@ def stats(
         f"SELECT COUNT(DISTINCT uuid), COUNT(DISTINCT session_id), COUNT(*) FROM events{clause}"
     ).fetchone()
 
+    actions_clause = clause + (" AND " if clause else " WHERE ") + "event_name != 'page_view'"
+    total_actions = q(f"SELECT COUNT(*) FROM events{actions_clause}").fetchone()[0]
+
     pv_clause = clause + (" AND " if clause else " WHERE ") + "event_name = 'page_view'"
     top_pages = q(
         f"SELECT page_path, COUNT(*) as views FROM events{pv_clause} GROUP BY page_path ORDER BY views DESC LIMIT 50"
@@ -126,6 +129,7 @@ def stats(
         "total_uuids": totals[0],
         "total_sessions": totals[1],
         "total_events": totals[2],
+        "total_actions": total_actions,
         "top_pages": [{"page_path": r[0], "views": r[1]} for r in top_pages],
         "top_events": [{"event_name": r[0], "count": r[1]} for r in top_events],
     }

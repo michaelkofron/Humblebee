@@ -10,6 +10,7 @@ export interface OverviewStats {
   total_uuids: number
   total_sessions: number
   total_events: number
+  total_actions: number
   top_pages: { page_path: string; views: number }[]
   top_events: { event_name: string; count: number }[]
 }

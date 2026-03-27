@@ -97,8 +97,8 @@ export default function Overview({ siteId, siteName, startDate, endDate }: {
           <div className="stat-label">Sessions</div>
         </div>
         <div className="stat-tile">
-          <div className="stat-value">{stats?.total_events?.toLocaleString() ?? '–'}</div>
-          <div className="stat-label">Events</div>
+          <div className="stat-value">{stats?.total_actions?.toLocaleString() ?? '–'}</div>
+          <div className="stat-label">Actions</div>
         </div>
       </div>
 
