@@ -12,10 +12,12 @@ function formatDisplay(date: string) {
 }
 
 const PRESETS = [
-  { label: 'Last 7 days',    start: () => daysAgoStr(7),  end: () => daysAgoStr(0) },
-  { label: 'Last 30 days',   start: () => daysAgoStr(30), end: () => daysAgoStr(0) },
-  { label: 'Last 3 months',  start: () => daysAgoStr(90), end: () => daysAgoStr(0) },
-  { label: 'YTD',            start: () => `${new Date().getFullYear()}-01-01`, end: () => daysAgoStr(0) },
+  { label: 'Last 7 days',   start: () => daysAgoStr(7),  end: () => daysAgoStr(0) },
+  { label: 'Last 28 days',  start: () => daysAgoStr(28), end: () => daysAgoStr(0) },
+  { label: 'Last 90 days',  start: () => daysAgoStr(90), end: () => daysAgoStr(0) },
+  { label: 'This month',    start: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }, end: () => daysAgoStr(0) },
+  { label: 'Last month',    start: () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10) }, end: () => { const d = new Date(); d.setDate(0); return d.toISOString().slice(0, 10) } },
+  { label: 'Year to date',  start: () => `${new Date().getFullYear()}-01-01`, end: () => daysAgoStr(0) },
 ]
 
 interface Props {
@@ -26,7 +28,7 @@ interface Props {
 
 export default function DateRangePicker({ startDate, endDate, onChange }: Props) {
   const [open, setOpen] = useState(false)
-  const [activePreset, setActivePreset] = useState<string | null>('Last 30 days')
+  const [activePreset, setActivePreset] = useState<string | null>('Last 28 days')
   const [draft, setDraft] = useState({ start: startDate, end: endDate })
   const ref = useRef<HTMLDivElement>(null)
 
