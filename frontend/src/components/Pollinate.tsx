@@ -77,8 +77,8 @@ function VennDiagram({ a, b, overlap, nameA, nameB, uid }: {
   )
 }
 
-export default function Pollinate({ siteId, siteName, startDate, endDate }: {
-  siteId: string; siteName: string | null; startDate: string; endDate: string
+export default function Pollinate({ siteId, siteName, startDate, endDate, coloniesVersion }: {
+  siteId: string; siteName: string | null; startDate: string; endDate: string; coloniesVersion?: number
 }) {
   const [pollinations, setPollinations] = useState<Pollination[]>([])
   const [counts, setCounts] = useState<Record<string, PollinationCount>>({})
@@ -119,7 +119,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate }: {
         setFormHiveB('')
       })
       .catch(() => {})
-  }, [siteId])
+  }, [siteId, coloniesVersion])
 
   // ── Fetch pollinations ────────────────────────────────────────────────────
   const fetchPollinations = useCallback(() => {
@@ -132,6 +132,18 @@ export default function Pollinate({ siteId, siteName, startDate, endDate }: {
   }, [siteId])
 
   useEffect(() => { fetchPollinations() }, [fetchPollinations])
+
+  // Re-fetch when a colony was created/deleted externally
+  useEffect(() => {
+    if (coloniesVersion === undefined || coloniesVersion === 0) return
+    fetchPollinations()
+  }, [coloniesVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close expanded card if its pollination was cascade-deleted
+  useEffect(() => {
+    if (expandedPol && !pollinations.find(p => p.id === expandedPol))
+      setExpandedPol(null)
+  }, [pollinations, expandedPol])
 
   // ── Count all pollinations ────────────────────────────────────────────────
   const countPollination = useCallback((id: string) => {
