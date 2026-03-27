@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Site, View } from './types'
 import Overview from './components/Overview'
 import Colonies from './components/Colonies'
+import Pollinate from './components/Pollinate'
 import DateRangePicker from './components/DateRangePicker'
 
 function daysAgoStr(n: number) {
@@ -27,6 +28,7 @@ export default function App() {
   const tabs: { key: View; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'colonies', label: 'Colonies' },
+    { key: 'pollinate', label: 'Pollinate' },
   ]
 
   return (
@@ -69,6 +71,7 @@ export default function App() {
       <div className="main">
         {view === 'overview' && <Overview siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />}
         {view === 'colonies' && <Colonies siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />}
+        {view === 'pollinate' && <Pollinate siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />}
       </div>
     </>
   )

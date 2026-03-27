@@ -70,4 +70,21 @@ export interface Hive {
   updated_at: string
 }
 
-export type View = 'overview' | 'colonies'
+export interface Pollination {
+  id: string
+  name: string
+  site_id: string | null
+  hive_a_id: string
+  hive_b_id: string
+  created_at: string
+}
+
+export interface PollinationCount {
+  a_count: number
+  b_count: number
+  overlap: number
+  a_only: number
+  b_only: number
+}
+
+export type View = 'overview' | 'colonies' | 'pollinate'

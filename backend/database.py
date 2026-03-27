@@ -59,4 +59,15 @@ def init_db() -> duckdb.DuckDBPyConnection:
     if 'site_id' not in cols:
         con.execute("ALTER TABLE hives ADD COLUMN site_id TEXT")
 
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS pollinations (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
+            site_id    TEXT,
+            hive_a_id  TEXT NOT NULL,
+            hive_b_id  TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT current_timestamp
+        )
+    """)
+
     return con

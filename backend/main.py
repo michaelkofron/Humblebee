@@ -414,6 +414,121 @@ def hive_count(
     return {"hive_id": hive_id, "count": count}
 
 
+# ── Shared helper ─────────────────────────────────────────────────────────────
+
+def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str]:
+    """Return the set of UUIDs matching a hive's steps for the given date range."""
+    row = db().execute("SELECT conditions, site_id FROM hives WHERE id = ?", [hive_id]).fetchone()
+    if not row:
+        return set()
+    steps = json.loads(row[0])
+    hive_site_id = row[1]
+
+    filters: list[str] = []
+    params: list = []
+    if hive_site_id:
+        filters.append("site_id = ?")
+        params.append(hive_site_id)
+    if start:
+        filters.append("timestamp >= CAST(? AS TIMESTAMP)")
+        params.append(start)
+    if end:
+        filters.append("timestamp < CAST(? AS TIMESTAMP) + INTERVAL 1 DAY")
+        params.append(end)
+
+    where = (" WHERE " + " AND ".join(filters)) if filters else ""
+    site_clause = " AND site_id = ?" if hive_site_id else ""
+    events_rows = db().execute(
+        f"""
+        SELECT uuid, session_id, event_name, page_path, timestamp, properties
+        FROM events
+        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
+        ORDER BY uuid, timestamp
+        """,
+        params + ([hive_site_id] if hive_site_id else []),
+    ).fetchall()
+
+    if not events_rows:
+        return set()
+
+    journeys: dict[str, list[tuple]] = {}
+    for r in events_rows:
+        journeys.setdefault(r[0], []).append(r)
+
+    return {uid for uid, evts in journeys.items() if _journey_matches(evts, steps)}
+
+
+# ── Pollinations ──────────────────────────────────────────────────────────────
+
+class PollinationCreate(BaseModel):
+    name: str
+    site_id: str | None = None
+    hive_a_id: str
+    hive_b_id: str
+
+
+@app.get("/api/pollinations")
+def list_pollinations(site_id: str | None = None):
+    if site_id:
+        rows = db().execute(
+            "SELECT id, name, site_id, hive_a_id, hive_b_id, created_at FROM pollinations WHERE site_id = ? ORDER BY created_at DESC",
+            [site_id],
+        ).fetchall()
+    else:
+        rows = db().execute(
+            "SELECT id, name, site_id, hive_a_id, hive_b_id, created_at FROM pollinations WHERE site_id IS NULL ORDER BY created_at DESC"
+        ).fetchall()
+    return [
+        {"id": r[0], "name": r[1], "site_id": r[2], "hive_a_id": r[3], "hive_b_id": r[4], "created_at": str(r[5])}
+        for r in rows
+    ]
+
+
+@app.post("/api/pollinations", status_code=201)
+def create_pollination(body: PollinationCreate):
+    if not body.name.strip():
+        raise HTTPException(400, "Name is required")
+    pol_id = str(_uuid.uuid4())
+    now = datetime.now().isoformat()
+    db().execute(
+        "INSERT INTO pollinations (id, name, site_id, hive_a_id, hive_b_id, created_at) VALUES (?,?,?,?,?,?)",
+        [pol_id, body.name.strip(), body.site_id or None, body.hive_a_id, body.hive_b_id, now],
+    )
+    return {"id": pol_id, "name": body.name.strip(), "site_id": body.site_id or None,
+            "hive_a_id": body.hive_a_id, "hive_b_id": body.hive_b_id, "created_at": now}
+
+
+@app.delete("/api/pollinations/{pol_id}")
+def delete_pollination(pol_id: str):
+    row = db().execute("SELECT id FROM pollinations WHERE id = ?", [pol_id]).fetchone()
+    if not row:
+        raise HTTPException(404, "Pollination not found")
+    db().execute("DELETE FROM pollinations WHERE id = ?", [pol_id])
+    return {"ok": True}
+
+
+@app.get("/api/pollinations/{pol_id}/count")
+def pollination_count(
+    pol_id: str,
+    start: str | None = None,
+    end: str | None = None,
+):
+    row = db().execute("SELECT hive_a_id, hive_b_id FROM pollinations WHERE id = ?", [pol_id]).fetchone()
+    if not row:
+        raise HTTPException(404, "Pollination not found")
+    set_a = _matching_uuids(row[0], start, end)
+    set_b = _matching_uuids(row[1], start, end)
+    overlap = set_a & set_b
+    return {
+        "pol_id": pol_id,
+        "a_count": len(set_a),
+        "b_count": len(set_b),
+        "overlap": len(overlap),
+        "a_only": len(set_a - set_b),
+        "b_only": len(set_b - set_a),
+    }
+
+
 class ConditionSearch(BaseModel):
     steps: list[dict]
     site_id: str | None = None
