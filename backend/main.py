@@ -2,7 +2,7 @@ import json
 import threading
 import time
 import uuid as _uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -429,11 +429,15 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
     computation cost once.
     """
     key = (hive_id, start or "", end or "")
-    cached = _uuid_set_cache.get(key)
-    if cached:
-        result, ts = cached
-        if time.time() - ts < _UUID_CACHE_TTL:
-            return set(result)
+    today = date.today().isoformat()
+    is_live = end is None or end >= today
+
+    if not is_live:
+        cached = _uuid_set_cache.get(key)
+        if cached:
+            result, ts = cached
+            if time.time() - ts < _UUID_CACHE_TTL:
+                return set(result)
 
     row = db().execute("SELECT conditions, site_id FROM hives WHERE id = ?", [hive_id]).fetchone()
     if not row:
@@ -466,7 +470,8 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
     ).fetchall()
 
     if not events_rows:
-        _uuid_set_cache[key] = (frozenset(), time.time())
+        if not is_live:
+            _uuid_set_cache[key] = (frozenset(), time.time())
         return set()
 
     journeys: dict[str, list[tuple]] = {}
@@ -474,7 +479,8 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
         journeys.setdefault(r[0], []).append(r)
 
     result = frozenset(uid for uid, evts in journeys.items() if _journey_matches(evts, steps))
-    _uuid_set_cache[key] = (result, time.time())
+    if not is_live:
+        _uuid_set_cache[key] = (result, time.time())
     return set(result)
 
 

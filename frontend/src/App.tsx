@@ -11,12 +11,27 @@ function daysAgoStr(n: number) {
   return d.toISOString().slice(0, 10)
 }
 
+const STORAGE_KEY = 'hb_date_range'
+
+function loadDateRange(): { start: string; end: string; preset: string | null } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const r = JSON.parse(raw)
+      if (typeof r.start === 'string' && typeof r.end === 'string')
+        return { start: r.start, end: r.end, preset: r.preset ?? null }
+    }
+  } catch {}
+  return { start: daysAgoStr(28), end: daysAgoStr(1), preset: 'Last 28 days' }
+}
+
 export default function App() {
   const [sites, setSites] = useState<Site[]>([])
   const [selectedSite, setSelectedSite] = useState<string>('')
   const [view, setView] = useState<View>('overview')
-  const [startDate, setStartDate] = useState(daysAgoStr(30))
-  const [endDate, setEndDate] = useState(daysAgoStr(0))
+  const [startDate, setStartDate] = useState(() => loadDateRange().start)
+  const [endDate, setEndDate] = useState(() => loadDateRange().end)
+  const [initialPreset] = useState<string | null>(() => loadDateRange().preset)
 
   useEffect(() => {
     fetch('/api/sites')
@@ -24,6 +39,17 @@ export default function App() {
       .then(setSites)
       .catch(() => {})
   }, [])
+
+  const handleDateChange = (start: string, end: string, preset: string | null) => {
+    setStartDate(start)
+    setEndDate(end)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ start, end, preset })) } catch {}
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const rangeIncludesToday = endDate === today
+  const daySpan = Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000)
+  const showCacheBanner = rangeIncludesToday && daySpan > 30
 
   const tabs: { key: View; label: string }[] = [
     { key: 'overview', label: 'Overview' },
@@ -52,7 +78,8 @@ export default function App() {
         <DateRangePicker
           startDate={startDate}
           endDate={endDate}
-          onChange={(s, e) => { setStartDate(s); setEndDate(e) }}
+          initialActivePreset={initialPreset}
+          onChange={handleDateChange}
         />
 
         <nav className="topbar-nav">
@@ -67,6 +94,17 @@ export default function App() {
           ))}
         </nav>
       </div>
+
+      {showCacheBanner && (
+        <div style={{
+          background: '#fffbeb', borderBottom: '1px solid #fcd34d',
+          padding: '8px 24px', fontSize: 12, color: '#92400e',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>⚠️</span>
+          <span>Date ranges over 30 days that include today bypass the cache and may be slow. For best performance, end on yesterday's date.</span>
+        </div>
+      )}
 
       <div className="main">
         <div style={{ display: view === 'overview' ? undefined : 'none' }}>

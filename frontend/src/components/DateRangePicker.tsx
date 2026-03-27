@@ -12,23 +12,26 @@ function formatDisplay(date: string) {
 }
 
 const PRESETS = [
-  { label: 'Last 7 days',   start: () => daysAgoStr(7),  end: () => daysAgoStr(0) },
-  { label: 'Last 28 days',  start: () => daysAgoStr(28), end: () => daysAgoStr(0) },
-  { label: 'Last 90 days',  start: () => daysAgoStr(90), end: () => daysAgoStr(0) },
-  { label: 'This month',    start: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }, end: () => daysAgoStr(0) },
+  { label: 'Today',         start: () => daysAgoStr(0),  end: () => daysAgoStr(0) },
+  { label: 'Last 3 days',   start: () => daysAgoStr(3),  end: () => daysAgoStr(1) },
+  { label: 'Last 7 days',   start: () => daysAgoStr(7),  end: () => daysAgoStr(1) },
+  { label: 'Last 28 days',  start: () => daysAgoStr(28), end: () => daysAgoStr(1) },
+  { label: 'Last 90 days',  start: () => daysAgoStr(90), end: () => daysAgoStr(1) },
+  { label: 'This month',    start: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }, end: () => daysAgoStr(1) },
   { label: 'Last month',    start: () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10) }, end: () => { const d = new Date(); d.setDate(0); return d.toISOString().slice(0, 10) } },
-  { label: 'Year to date',  start: () => `${new Date().getFullYear()}-01-01`, end: () => daysAgoStr(0) },
+  { label: 'Year to date',  start: () => `${new Date().getFullYear()}-01-01`, end: () => daysAgoStr(1) },
 ]
 
 interface Props {
   startDate: string
   endDate: string
-  onChange: (start: string, end: string) => void
+  onChange: (start: string, end: string, preset: string | null) => void
+  initialActivePreset?: string | null
 }
 
-export default function DateRangePicker({ startDate, endDate, onChange }: Props) {
+export default function DateRangePicker({ startDate, endDate, onChange, initialActivePreset = 'Last 28 days' }: Props) {
   const [open, setOpen] = useState(false)
-  const [activePreset, setActivePreset] = useState<string | null>('Last 28 days')
+  const [activePreset, setActivePreset] = useState<string | null>(initialActivePreset)
   const [draft, setDraft] = useState({ start: startDate, end: endDate })
   const ref = useRef<HTMLDivElement>(null)
 
@@ -44,14 +47,14 @@ export default function DateRangePicker({ startDate, endDate, onChange }: Props)
     const s = preset.start(), e = preset.end()
     setActivePreset(preset.label)
     setDraft({ start: s, end: e })
-    onChange(s, e)
+    onChange(s, e, preset.label)
     setOpen(false)
   }
 
   const applyCustom = () => {
     if (!draft.start || !draft.end || draft.start > draft.end) return
     setActivePreset(null)
-    onChange(draft.start, draft.end)
+    onChange(draft.start, draft.end, null)
     setOpen(false)
   }
 
