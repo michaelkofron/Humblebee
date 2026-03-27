@@ -265,15 +265,20 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700 }}>{title}</h2>
-        <button
-          className="btn btn-primary"
-          onClick={() => { setShowCreate(s => !s); setSaveError('') }}
-          style={{ padding: '6px 14px', fontSize: 13 }}
-        >
-          Cross-pollinate +
-        </button>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700 }}>{title}</h2>
+          <button
+            className="btn btn-primary"
+            onClick={() => { setShowCreate(s => !s); setSaveError('') }}
+            style={{ padding: '6px 14px', fontSize: 13 }}
+          >
+            Cross-pollinate +
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6, maxWidth: 560 }}>
+          Pollinations compare two colonies to reveal how much their audiences overlap. Pick any two saved colonies to see shared visitors, unique counts, and browse who's in both.
+        </p>
       </div>
 
       {/* Creator */}
@@ -322,12 +327,15 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
         </div>
       )}
 
-      {/* Empty state */}
-      {pollinations.length === 0 && !showCreate && (
-        <div style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 40, textAlign: 'center' }}>
-          No cross-pollinations yet — pick two colonies to compare.
-        </div>
-      )}
+      {/* Saved pollinations header + empty state */}
+      <div style={{ marginTop: 8 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>🌼 Saved Pollinations</h3>
+        {pollinations.length === 0 && !showCreate && (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
+            🌼 No pollinations saved yet — cross-pollinate two colonies to compare their audiences
+          </div>
+        )}
+      </div>
 
       {/* Pollination cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

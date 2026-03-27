@@ -424,6 +424,9 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
     <>
       <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700 }}>{title}</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6, maxWidth: 560 }}>
+          Colonies are saved groups of visitors who match a sequence of conditions — like "came from Google, then signed up." Build one using the filter below, then save it to track and compare over time.
+        </p>
       </div>
 
       {/* Search + UUID list */}
@@ -695,7 +698,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>🍯 Saved Colonies</h3>
         {colonies.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
-            🍯 No colonies yet — use the filter above and save one
+            🍯 No colonies saved yet — build a filter above and save it as a colony
           </div>
         )}
         {colonies.map(h => {
