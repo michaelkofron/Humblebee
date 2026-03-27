@@ -351,11 +351,21 @@ def create_hive(body: HiveCreate):
             "steps": body.steps, "created_at": now, "updated_at": now}
 
 
+@app.get("/api/hives/{hive_id}/pollination-count")
+def hive_pollination_count(hive_id: str):
+    rows = db().execute(
+        "SELECT name FROM pollinations WHERE hive_a_id = ? OR hive_b_id = ?",
+        [hive_id, hive_id],
+    ).fetchall()
+    return {"count": len(rows), "names": [r[0] for r in rows]}
+
+
 @app.delete("/api/hives/{hive_id}")
 def delete_hive(hive_id: str):
     row = db().execute("SELECT id FROM hives WHERE id = ?", [hive_id]).fetchone()
     if not row:
         raise HTTPException(404, "Hive not found")
+    db().execute("DELETE FROM pollinations WHERE hive_a_id = ? OR hive_b_id = ?", [hive_id, hive_id])
     db().execute("DELETE FROM hives WHERE id = ?", [hive_id])
     return {"ok": True}
 

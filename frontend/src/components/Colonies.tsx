@@ -125,8 +125,8 @@ const newStep = (sequence: HiveSequence = 'anytime'): ConditionStep => ({
   conditions: [newRow()],
 })
 
-export default function Colonies({ siteId, siteName, startDate, endDate }: {
-  siteId: string; siteName: string | null; startDate: string; endDate: string
+export default function Colonies({ siteId, siteName, startDate, endDate, onColonyMutated }: {
+  siteId: string; siteName: string | null; startDate: string; endDate: string; onColonyMutated?: () => void
 }) {
   // UUID search + list
   const [uuids, setUuids] = useState<UuidRow[]>([])
@@ -382,11 +382,15 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
 
   const countColony = (id: string) => countAll([id], startDate, endDate)
 
-  const deleteColony = (id: string) => {
-    if (!confirm('Delete this colony?')) return
-    fetch(`/api/hives/${id}`, { method: 'DELETE' })
-      .then(() => setColonies(c => c.filter(x => x.id !== id)))
-      .catch(() => {})
+  const deleteColony = async (id: string) => {
+    const r = await fetch(`/api/hives/${id}/pollination-count`).then(r => r.json()).catch(() => ({ count: 0, names: [] }))
+    const message = r.count > 0
+      ? `This colony is used in ${r.count} pollination${r.count !== 1 ? 's' : ''} (${r.names.join(', ')}). Deleting it will also delete those pollinations.\n\nContinue?`
+      : 'Delete this colony?'
+    if (!confirm(message)) return
+    await fetch(`/api/hives/${id}`, { method: 'DELETE' }).catch(() => {})
+    setColonies(c => c.filter(x => x.id !== id))
+    onColonyMutated?.()
   }
 
   const saveColony = () => {
@@ -407,6 +411,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
         clearFilter()
         setExpandedColony(h.id)
         fetchColonyUuids(h, 0, false)
+        onColonyMutated?.()
       })
       .catch(() => setSaveError('Failed to save'))
       .finally(() => setSaving(false))

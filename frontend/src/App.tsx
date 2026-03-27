@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Site, View } from './types'
 import Overview from './components/Overview'
 import Colonies from './components/Colonies'
@@ -32,6 +32,8 @@ export default function App() {
   const [startDate, setStartDate] = useState(() => loadDateRange().start)
   const [endDate, setEndDate] = useState(() => loadDateRange().end)
   const [initialPreset] = useState<string | null>(() => loadDateRange().preset)
+  const [coloniesVersion, setColoniesVersion] = useState(0)
+  const onColonyMutated = useCallback(() => setColoniesVersion(v => v + 1), [])
 
   useEffect(() => {
     fetch('/api/sites')
@@ -111,10 +113,10 @@ export default function App() {
           <Overview siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />
         </div>
         <div style={{ display: view === 'colonies' ? undefined : 'none' }}>
-          <Colonies siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />
+          <Colonies siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} onColonyMutated={onColonyMutated} />
         </div>
         <div style={{ display: view === 'pollinate' ? undefined : 'none' }}>
-          <Pollinate siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} />
+          <Pollinate siteId={selectedSite} siteName={sites.find(s => s.site_id === selectedSite)?.site_name ?? null} startDate={startDate} endDate={endDate} coloniesVersion={coloniesVersion} />
         </div>
       </div>
     </>
