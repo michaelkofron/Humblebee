@@ -146,15 +146,11 @@ export default function Pollinate({ siteId, siteName, startDate, endDate }: {
       .finally(() => setCountLoading(prev => ({ ...prev, [id]: false })))
   }, [startDate, endDate])
 
+  // Re-count + refresh open UUID list when dates change (only the expanded card)
   useEffect(() => {
-    pollinations.forEach(p => countPollination(p.id))
-  }, [pollinations, countPollination])
-
-  // Re-count + refresh open UUID list when dates change
-  useEffect(() => {
-    if (pollinations.length === 0) return
-    pollinations.forEach(p => countPollination(p.id))
-    if (expandedPol) fetchOverlapUuids(expandedPol, 0, false)
+    if (!expandedPol) return
+    countPollination(expandedPol)
+    fetchOverlapUuids(expandedPol, 0, false)
   }, [startDate, endDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Overlap UUID fetch ────────────────────────────────────────────────────
@@ -181,6 +177,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate }: {
       setExpandedPol(null)
     } else {
       setExpandedPol(id)
+      countPollination(id)
       fetchOverlapUuids(id, 0, false)
     }
   }

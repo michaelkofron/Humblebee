@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 import uuid as _uuid
 from datetime import datetime, timedelta
 
@@ -416,8 +417,24 @@ def hive_count(
 
 # ── Shared helper ─────────────────────────────────────────────────────────────
 
+_uuid_set_cache: dict[tuple, tuple[frozenset, float]] = {}
+_UUID_CACHE_TTL = 300  # 5 minutes
+
+
 def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str]:
-    """Return the set of UUIDs matching a hive's steps for the given date range."""
+    """Return the set of UUIDs matching a hive's steps for the given date range.
+
+    Results are cached per (hive_id, start, end) for up to 5 minutes so that
+    multiple pollination count/overlap requests sharing a colony only pay the
+    computation cost once.
+    """
+    key = (hive_id, start or "", end or "")
+    cached = _uuid_set_cache.get(key)
+    if cached:
+        result, ts = cached
+        if time.time() - ts < _UUID_CACHE_TTL:
+            return set(result)
+
     row = db().execute("SELECT conditions, site_id FROM hives WHERE id = ?", [hive_id]).fetchone()
     if not row:
         return set()
@@ -449,13 +466,16 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
     ).fetchall()
 
     if not events_rows:
+        _uuid_set_cache[key] = (frozenset(), time.time())
         return set()
 
     journeys: dict[str, list[tuple]] = {}
     for r in events_rows:
         journeys.setdefault(r[0], []).append(r)
 
-    return {uid for uid, evts in journeys.items() if _journey_matches(evts, steps)}
+    result = frozenset(uid for uid, evts in journeys.items() if _journey_matches(evts, steps))
+    _uuid_set_cache[key] = (result, time.time())
+    return set(result)
 
 
 # ── Pollinations ──────────────────────────────────────────────────────────────
