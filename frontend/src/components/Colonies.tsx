@@ -485,7 +485,9 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
                           style={{ fontSize: 12 }}
                         >
                           {CONDITION_FIELDS.map(f => (
-                            <option key={f.value} value={f.value}>{f.label}</option>
+                            <option key={f.value} value={f.value} disabled={f.value === 'entry_page' && si > 0}>
+                              {f.label}
+                            </option>
                           ))}
                         </select>
                         <select

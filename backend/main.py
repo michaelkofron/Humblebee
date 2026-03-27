@@ -378,17 +378,23 @@ def hive_count(
 
     where = (" WHERE " + " AND ".join(filters)) if filters else ""
 
-    # Get all events grouped by uuid
+    # Fetch full event history for UUIDs active in the date/site scope.
+    # Subquery finds qualifying UUIDs; outer query gets their complete history
+    # so _mark_entries correctly identifies the true first-ever page view.
+    site_clause = " AND site_id = ?" if hive_site_id else ""
     events_rows = db().execute(
         f"""
         SELECT uuid, session_id, event_name, page_path, timestamp, properties
-        FROM events{where}
+        FROM events
+        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
         ORDER BY uuid, timestamp
         """,
-        params,
+        params + ([hive_site_id] if hive_site_id else []),
     ).fetchall()
 
-    # Group into journeys
+    if not events_rows:
+        return {"hive_id": hive_id, "count": 0}
+
     journeys: dict[str, list[tuple]] = {}
     for r in events_rows:
         journeys.setdefault(r[0], []).append(r)
@@ -429,14 +435,22 @@ def journey_search(body: ConditionSearch):
 
     where = (" WHERE " + " AND ".join(filters)) if filters else ""
 
+    # Fetch full event history for UUIDs active in the date/site scope.
+    # Subquery finds qualifying UUIDs; outer query gets their complete history
+    # so _mark_entries correctly identifies the true first-ever page view.
+    site_clause = " AND site_id = ?" if body.site_id else ""
     events_rows = db().execute(
         f"""
         SELECT uuid, session_id, event_name, page_path, timestamp, properties
-        FROM events{where}
+        FROM events
+        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
         ORDER BY uuid, timestamp
         """,
-        params,
+        params + ([body.site_id] if body.site_id else []),
     ).fetchall()
+
+    if not events_rows:
+        return {"total": 0, "items": []}
 
     journeys: dict[str, list[tuple]] = {}
     for r in events_rows:
@@ -489,23 +503,27 @@ def _mark_entries(events: list[tuple]) -> list[tuple]:
     return result
 
 
+def _row_matches_event(event: tuple, row: dict) -> bool:
+    """Return True if a single event satisfies the condition row (field applies + value matches)."""
+    field    = row.get("field", "event_name")
+    match    = row.get("match", "is")
+    value    = row.get("value", "")
+    negate   = match in ("is_not", "does_not_contain")
+    contains = match in ("contains", "does_not_contain")
+    if not _event_field_applies(event, field):
+        return False
+    hit = _event_matches(event, field, value, contains)
+    return (not negate and hit) or (negate and not hit)
+
+
 def _find_in_range(events: list[tuple], row: dict, start: int, session: str | None = None) -> int | None:
     """Return the index of the first event from `start` matching the condition row.
     If session is set, stop searching when the session changes.
     """
-    field   = row.get("field", "event_name")
-    match   = row.get("match", "is")
-    value   = row.get("value", "")
-    negate  = match in ("is_not", "does_not_contain")
-    contains = match in ("contains", "does_not_contain")
-
     for i in range(start, len(events)):
         if session is not None and events[i][1] != session:
             break
-        if not _event_field_applies(events[i], field):
-            continue
-        hit = _event_matches(events[i], field, value, contains)
-        if (not negate and hit) or (negate and not hit):
+        if _row_matches_event(events[i], row):
             return i
     return None
 
@@ -513,6 +531,13 @@ def _find_in_range(events: list[tuple], row: dict, start: int, session: str | No
 def _journey_matches(events: list[tuple], steps: list[dict]) -> bool:
     """Check if a visitor's journey satisfies all steps in order.
     Each step has: sequence, operator ('and'|'or'), conditions (list of rows).
+
+    AND step: find a single event satisfying ALL conditions simultaneously.
+    OR  step: find the earliest event satisfying ANY condition.
+
+    sequence="immediately": the very next event after the previous match must satisfy this step.
+    sequence="next_session": scan the entire next session for a match.
+    sequence="anytime": scan any event after the previous match.
     """
     if not steps:
         return False
@@ -528,39 +553,53 @@ def _journey_matches(events: list[tuple], steps: list[dict]) -> bool:
         if not conditions:
             return False
 
-        search_start = 0 if si == 0 else prev_idx + 1
-        session: str | None = None
+        # ── "immediately" — the very next event must satisfy this step ──────
+        if si > 0 and sequence == "immediately":
+            next_i = prev_idx + 1
+            if next_i >= len(events):
+                return False
+            candidate = events[next_i]
+            if operator == "and":
+                ok = all(_row_matches_event(candidate, row) for row in conditions)
+            else:
+                ok = any(_row_matches_event(candidate, row) for row in conditions)
+            if not ok:
+                return False
+            prev_idx = next_i
+            continue
 
-        if si > 0:
-            if sequence == "immediately":
-                if prev_idx < 0 or prev_idx >= len(events):
-                    return False
-                session = events[prev_idx][1]  # same session only
-            elif sequence == "next_session":
-                if prev_idx < 0:
-                    return False
-                cur_session = events[prev_idx][1]
-                next_start = next(
-                    (i for i in range(prev_idx + 1, len(events)) if events[i][1] != cur_session),
-                    None,
-                )
-                if next_start is None:
-                    return False
-                search_start = next_start
-                session = events[next_start][1]
+        # ── Determine search window ───────────────────────────────────────
+        if si == 0:
+            search_start = 0
+            session: str | None = None
+        elif sequence == "next_session":
+            cur_session = events[prev_idx][1]
+            next_start = next(
+                (i for i in range(prev_idx + 1, len(events)) if events[i][1] != cur_session),
+                None,
+            )
+            if next_start is None:
+                return False
+            search_start = next_start
+            session = events[next_start][1]
+        else:  # anytime
+            search_start = prev_idx + 1
+            session = None
 
+        # ── Search for a matching event ───────────────────────────────────
         if operator == "and":
-            cur = search_start
-            last = prev_idx
-            for row in conditions:
-                idx = _find_in_range(events, row, cur, session)
-                if idx is None:
-                    return False
-                last = idx
-                cur = idx + 1
-            prev_idx = last
+            found_idx: int | None = None
+            for i in range(search_start, len(events)):
+                if session is not None and events[i][1] != session:
+                    break
+                if all(_row_matches_event(events[i], row) for row in conditions):
+                    found_idx = i
+                    break
+            if found_idx is None:
+                return False
+            prev_idx = found_idx
 
-        else:  # or — any one condition is enough; take the earliest match
+        else:  # or
             best: int | None = None
             for row in conditions:
                 idx = _find_in_range(events, row, search_start, session)
