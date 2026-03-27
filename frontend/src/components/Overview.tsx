@@ -131,7 +131,7 @@ export default function Overview({ siteId, siteName, startDate, endDate }: {
         </div>
 
         <div className="card" style={{ display: 'flex', flexDirection: 'column', maxHeight: 480 }}>
-          <div className="card-header">Top Events</div>
+          <div className="card-header">Top Actions</div>
           <div ref={eventsRef} onScroll={handleEventsScroll} style={{ flex: 1, overflowY: 'auto' }}>
             <table className="table">
               <thead>

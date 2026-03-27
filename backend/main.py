@@ -178,11 +178,12 @@ def list_events(
     offset: int = 0,
 ):
     clause, params = _stat_filters(site_id, start, end)
+    actions = clause + (" AND " if clause else " WHERE ") + "event_name != 'page_view'"
     total = db().execute(
-        f"SELECT COUNT(DISTINCT event_name) FROM events{clause}", params
+        f"SELECT COUNT(DISTINCT event_name) FROM events{actions}", params
     ).fetchone()[0]
     rows = db().execute(
-        f"SELECT event_name, COUNT(*) as count FROM events{clause} GROUP BY event_name ORDER BY count DESC LIMIT ? OFFSET ?",
+        f"SELECT event_name, COUNT(*) as count FROM events{actions} GROUP BY event_name ORDER BY count DESC LIMIT ? OFFSET ?",
         params + [limit, offset],
     ).fetchall()
     return {"total": total, "items": [{"event_name": r[0], "count": r[1]} for r in rows]}

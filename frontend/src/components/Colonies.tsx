@@ -647,13 +647,12 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
                           />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              {ev.event_name !== 'page_view' && (
-                                <span className="badge-amber">{ev.event_name}</span>
-                              )}
-                              {ev.page_path && (
+                              {ev.event_name === 'page_view' ? (
                                 <span className="text-mono" style={{ color: 'var(--text-secondary)' }}>
                                   {ev.page_path}
                                 </span>
+                              ) : (
+                                <span className="badge-amber">{ev.event_name}</span>
                               )}
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
