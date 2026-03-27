@@ -724,9 +724,6 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                  <button className="btn" onClick={() => countColony(h.id)} disabled={countLoading[h.id]} style={{ fontSize: 12, padding: '4px 10px' }}>
-                    Recount
-                  </button>
                   <button className="btn btn-danger" onClick={() => deleteColony(h.id)} style={{ fontSize: 12, padding: '4px 10px' }}>Delete</button>
                 </div>
               </div>
