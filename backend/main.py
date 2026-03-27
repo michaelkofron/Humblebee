@@ -553,10 +553,13 @@ def _journey_matches(events: list[tuple], steps: list[dict]) -> bool:
         if not conditions:
             return False
 
-        # ── "immediately" — the very next event must satisfy this step ──────
+        # ── "immediately" — the very next event in the same session must satisfy this step ──
         if si > 0 and sequence == "immediately":
             next_i = prev_idx + 1
             if next_i >= len(events):
+                return False
+            # Must still be in the same session — don't cross session boundaries
+            if events[next_i][1] != events[prev_idx][1]:
                 return False
             candidate = events[next_i]
             if operator == "and":

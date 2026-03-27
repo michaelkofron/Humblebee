@@ -4,11 +4,57 @@ import type { Journey, JourneyEvent, UuidRow, Hive, ConditionRow, ConditionStep,
 const PAGE_SIZE = 100
 
 const CONDITION_FIELDS: { value: HiveConditionField; label: string; placeholder: string }[] = [
-  { value: 'event_name',    label: 'Event name',    placeholder: 'e.g. signup' },
+  { value: 'event_name',    label: 'Action',        placeholder: 'e.g. signup' },
   { value: 'page_path',     label: 'Page path',     placeholder: 'e.g. /pricing' },
   { value: 'entry_page',    label: 'Entry page',    placeholder: 'e.g. /blog/getting-started' },
   { value: 'page_referrer', label: 'Page referrer', placeholder: 'e.g. google.com' },
 ]
+
+// Cross-field companions (self-compatibility is handled separately by match type below).
+const FIELD_COMPANIONS: Record<HiveConditionField, HiveConditionField[]> = {
+  entry_page:    ['page_referrer'],
+  event_name:    [],
+  page_path:     ['page_referrer'],
+  page_referrer: ['entry_page', 'page_path'],
+}
+
+/** Effective companions for a row: cross-field companions + self if non-exact match. */
+function rowCompanions(row: ConditionRow): Set<HiveConditionField> {
+  const isExact = row.match === 'is' || row.match === 'is_not'
+  const s = new Set<HiveConditionField>(FIELD_COMPANIONS[row.field])
+  if (!isExact) s.add(row.field)  // contains / does_not_contain → same field can repeat
+  return s
+}
+
+/**
+ * If sibling rows in the step (AND only) use the same field with non-exact match,
+ * this row must also be non-exact — can't mix "contains" and "is" for the same field in AND.
+ * OR steps have no restriction: each condition is evaluated independently.
+ */
+function allowedMatchesForRow(step: ConditionStep, rowIdx: number): HiveConditionMatch[] {
+  if (step.operator === 'or') return ['is', 'is_not', 'contains', 'does_not_contain']
+  const field = step.conditions[rowIdx].field
+  const siblings = step.conditions.filter((_, i) => i !== rowIdx && _.field === field)
+  const siblingNonExact = siblings.some(r => r.match === 'contains' || r.match === 'does_not_contain')
+  return siblingNonExact ? ['contains', 'does_not_contain'] : ['is', 'is_not', 'contains', 'does_not_contain']
+}
+
+/** Returns the fields that are compatible for a given row position, given the other rows in the step. */
+function allowedFieldsForStep(step: ConditionStep, si: number, excludeIdx?: number): HiveConditionField[] {
+  const all: HiveConditionField[] = ['event_name', 'page_path', 'entry_page', 'page_referrer']
+  const base = si === 0 ? all : all.filter(f => f !== 'entry_page')
+  // OR steps: conditions are evaluated independently, so any field combination is valid.
+  if (step.operator === 'or') return base
+  // AND steps: all conditions must match the same event — apply intersection rules.
+  const others = step.conditions.filter((_, i) => i !== excludeIdx)
+  if (others.length === 0) return base
+  let allowed = new Set<HiveConditionField>(base)
+  for (const row of others) {
+    const companions = rowCompanions(row)
+    allowed = new Set([...allowed].filter(f => companions.has(f)))
+  }
+  return [...allowed]
+}
 
 const MATCH_OPTIONS: { value: HiveConditionMatch; label: string }[] = [
   { value: 'is',               label: 'is' },
@@ -231,10 +277,15 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
   }
 
   const addRowToStep = (si: number, operator: StepOperator) => {
-    setSteps(prev => prev.map((s, i) => i === si
-      ? { ...s, operator, conditions: [...s.conditions, newRow()] }
-      : s
-    ))
+    setSteps(prev => prev.map((s, i) => {
+      if (i !== si) return s
+      const withOp = { ...s, operator }
+      const allowed = allowedFieldsForStep(withOp, si)
+      const field = allowed[0] ?? 'event_name'
+      const hasNonExact = operator === 'and' && s.conditions.some(r => r.field === field && (r.match === 'contains' || r.match === 'does_not_contain'))
+      const match: HiveConditionMatch = hasNonExact ? 'contains' : 'is'
+      return { ...withOp, conditions: [...s.conditions, { field, match, value: '' }] }
+    }))
   }
 
   const removeRowFromStep = (si: number, ci: number) => {
@@ -484,11 +535,14 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
                           onChange={e => updateRow(si, ci, { field: e.target.value as HiveConditionField })}
                           style={{ fontSize: 12 }}
                         >
-                          {CONDITION_FIELDS.map(f => (
-                            <option key={f.value} value={f.value} disabled={f.value === 'entry_page' && si > 0}>
-                              {f.label}
-                            </option>
-                          ))}
+                          {CONDITION_FIELDS.map(f => {
+                            const allowed = allowedFieldsForStep(step, si, ci)
+                            return (
+                              <option key={f.value} value={f.value} disabled={!allowed.includes(f.value)}>
+                                {f.label}
+                              </option>
+                            )
+                          })}
                         </select>
                         <select
                           className="select"
@@ -496,9 +550,14 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
                           onChange={e => updateRow(si, ci, { match: e.target.value as HiveConditionMatch })}
                           style={{ fontSize: 12 }}
                         >
-                          {MATCH_OPTIONS.map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
+                          {MATCH_OPTIONS.map(m => {
+                            const allowedMatches = allowedMatchesForRow(step, ci)
+                            return (
+                              <option key={m.value} value={m.value} disabled={!allowedMatches.includes(m.value)}>
+                                {m.label}
+                              </option>
+                            )
+                          })}
                         </select>
                         <input
                           className="input"
@@ -516,8 +575,12 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
                   {/* + AND / + OR */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-ghost" onClick={() => addRowToStep(si, 'and')} style={{ fontSize: 11, padding: '3px 8px' }}>+ AND</button>
-                      <button className="btn btn-ghost" onClick={() => addRowToStep(si, 'or')} style={{ fontSize: 11, padding: '3px 8px' }}>+ OR</button>
+                      {allowedFieldsForStep({ ...step, operator: 'and' }, si).length > 0 && (
+                        <button className="btn btn-ghost" onClick={() => addRowToStep(si, 'and')} style={{ fontSize: 11, padding: '3px 8px' }}>+ AND</button>
+                      )}
+                      {allowedFieldsForStep({ ...step, operator: 'or' }, si).length > 0 && (
+                        <button className="btn btn-ghost" onClick={() => addRowToStep(si, 'or')} style={{ fontSize: 11, padding: '3px 8px' }}>+ OR</button>
+                      )}
                     </div>
                     {steps.length > 1 && (
                       <button className="btn btn-ghost" onClick={() => removeStep(si)} style={{ fontSize: 11, padding: '3px 8px', color: 'var(--error)' }}>
