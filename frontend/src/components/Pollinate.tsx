@@ -174,13 +174,15 @@ export default function Pollinate({ siteId, siteName, startDate, endDate }: {
       })
   }, [startDate, endDate])
 
+  const isLive = endDate === new Date().toISOString().slice(0, 10)
+
   const togglePol = (id: string) => {
     if (expandedPol === id) {
       setExpandedPol(null)
     } else {
       setExpandedPol(id)
-      if (!counts[id]) countPollination(id)
-      if (!overlapUuids[id]) fetchOverlapUuids(id, 0, false)
+      if (!counts[id] || isLive) countPollination(id)
+      if (!overlapUuids[id] || isLive) fetchOverlapUuids(id, 0, false)
     }
   }
 

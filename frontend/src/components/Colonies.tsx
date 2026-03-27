@@ -341,12 +341,14 @@ export default function Colonies({ siteId, siteName, startDate, endDate }: {
       })
   }, [siteId, startDate, endDate])
 
+  const isLive = endDate === new Date().toISOString().slice(0, 10)
+
   const toggleColony = (colony: Hive) => {
     if (expandedColony === colony.id) {
       setExpandedColony(null)
     } else {
       setExpandedColony(colony.id)
-      if (!colonyUuids[colony.id]) fetchColonyUuids(colony, 0, false)
+      if (!colonyUuids[colony.id] || isLive) fetchColonyUuids(colony, 0, false)
     }
   }
 
