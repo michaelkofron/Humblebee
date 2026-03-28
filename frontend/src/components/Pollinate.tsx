@@ -276,8 +276,8 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
             Cross-pollinate +
           </button>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6, maxWidth: 560 }}>
-          Pollinations compare two colonies to reveal how much their audiences overlap. Pick any two saved colonies to see shared visitors, unique counts, and browse who's in both.
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6}}>
+          Pollinations compare two colonies to reveal how much their audiences overlap. Pick any two saved colonies to see shared visitors, unique counts, and percentages.
         </p>
       </div>
 
@@ -332,7 +332,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>🌼 Saved Pollinations</h3>
         {pollinations.length === 0 && !showCreate && (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
-            🌼 No pollinations saved yet — cross-pollinate two colonies to compare their audiences
+            🌼 No pollinations saved yet. Cross-pollinate two colonies to compare their audiences.
           </div>
         )}
       </div>
