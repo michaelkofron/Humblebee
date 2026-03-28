@@ -251,7 +251,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
 
   const toggleColonySelect = (id: string) => {
     if (selectedA === id) {
-      setSelectedA(selectedB)
+      setSelectedA(null)
       setSelectedB(null)
     } else if (selectedB === id) {
       setSelectedB(null)
@@ -260,7 +260,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
     } else if (!selectedB) {
       setSelectedB(id)
     } else {
-      setSelectedB(id)
+      setSelectedA(id)
     }
   }
 
