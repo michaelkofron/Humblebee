@@ -12,7 +12,7 @@ function formatDisplay(date: string) {
 }
 
 const PRESETS = [
-  { label: 'Today',         start: () => daysAgoStr(0),  end: () => daysAgoStr(0) },
+  { label: 'Past 24 hours', start: () => daysAgoStr(0),  end: () => daysAgoStr(0) },
   { label: 'Last 3 days',   start: () => daysAgoStr(3),  end: () => daysAgoStr(1) },
   { label: 'Last 7 days',   start: () => daysAgoStr(7),  end: () => daysAgoStr(1) },
   { label: 'Last 28 days',  start: () => daysAgoStr(28), end: () => daysAgoStr(1) },
