@@ -45,7 +45,7 @@ def startup():
     except Exception:
         done = None
     if not done:
-        con.execute("DELETE FROM hives")
+        con.execute("DELETE FROM colonies")
         try:
             con.execute("INSERT INTO migrations VALUES (2)")
         except Exception:
@@ -305,24 +305,24 @@ def get_journey(visitor_uuid: str, site_id: str | None = None):
     return {"uuid": visitor_uuid, "events": events}
 
 
-# ── Hives ─────────────────────────────────────────────────────────────────────
+# ── Colonies ──────────────────────────────────────────────────────────────────
 
-class HiveCreate(BaseModel):
+class ColonyCreate(BaseModel):
     name: str
     steps: list[dict]
     site_id: str | None = None
 
 
-@app.get("/api/hives")
-def list_hives(site_id: str | None = None):
+@app.get("/api/colonies")
+def list_colonies(site_id: str | None = None):
     if site_id:
         rows = db().execute(
-            "SELECT id, name, site_id, conditions, created_at, updated_at FROM hives WHERE site_id = ? ORDER BY created_at DESC",
+            "SELECT id, name, site_id, conditions, created_at, updated_at FROM colonies WHERE site_id = ? ORDER BY created_at DESC",
             [site_id],
         ).fetchall()
     else:
         rows = db().execute(
-            "SELECT id, name, site_id, conditions, created_at, updated_at FROM hives WHERE site_id IS NULL ORDER BY created_at DESC"
+            "SELECT id, name, site_id, conditions, created_at, updated_at FROM colonies WHERE site_id IS NULL ORDER BY created_at DESC"
         ).fetchall()
     return [
         {
@@ -334,59 +334,59 @@ def list_hives(site_id: str | None = None):
     ]
 
 
-@app.post("/api/hives", status_code=201)
-def create_hive(body: HiveCreate):
+@app.post("/api/colonies", status_code=201)
+def create_colony(body: ColonyCreate):
     if not body.name.strip():
         raise HTTPException(400, "Name is required")
     if not body.steps:
         raise HTTPException(400, "At least one step is required")
 
-    hive_id = str(_uuid.uuid4())
+    colony_id = str(_uuid.uuid4())
     now = datetime.now().isoformat()
     db().execute(
-        "INSERT INTO hives (id, name, site_id, conditions, created_at, updated_at) VALUES (?,?,?,?,?,?)",
-        [hive_id, body.name.strip(), body.site_id or None, json.dumps(body.steps), now, now],
+        "INSERT INTO colonies (id, name, site_id, conditions, created_at, updated_at) VALUES (?,?,?,?,?,?)",
+        [colony_id, body.name.strip(), body.site_id or None, json.dumps(body.steps), now, now],
     )
-    return {"id": hive_id, "name": body.name.strip(), "site_id": body.site_id or None,
+    return {"id": colony_id, "name": body.name.strip(), "site_id": body.site_id or None,
             "steps": body.steps, "created_at": now, "updated_at": now}
 
 
-@app.get("/api/hives/{hive_id}/pollination-count")
-def hive_pollination_count(hive_id: str):
+@app.get("/api/colonies/{colony_id}/pollination-count")
+def colony_pollination_count(colony_id: str):
     rows = db().execute(
-        "SELECT name FROM pollinations WHERE hive_a_id = ? OR hive_b_id = ?",
-        [hive_id, hive_id],
+        "SELECT name FROM pollinations WHERE colony_a_id = ? OR colony_b_id = ?",
+        [colony_id, colony_id],
     ).fetchall()
     return {"count": len(rows), "names": [r[0] for r in rows]}
 
 
-@app.delete("/api/hives/{hive_id}")
-def delete_hive(hive_id: str):
-    row = db().execute("SELECT id FROM hives WHERE id = ?", [hive_id]).fetchone()
+@app.delete("/api/colonies/{colony_id}")
+def delete_colony(colony_id: str):
+    row = db().execute("SELECT id FROM colonies WHERE id = ?", [colony_id]).fetchone()
     if not row:
-        raise HTTPException(404, "Hive not found")
-    db().execute("DELETE FROM pollinations WHERE hive_a_id = ? OR hive_b_id = ?", [hive_id, hive_id])
-    db().execute("DELETE FROM hives WHERE id = ?", [hive_id])
+        raise HTTPException(404, "Colony not found")
+    db().execute("DELETE FROM pollinations WHERE colony_a_id = ? OR colony_b_id = ?", [colony_id, colony_id])
+    db().execute("DELETE FROM colonies WHERE id = ?", [colony_id])
     return {"ok": True}
 
 
-@app.get("/api/hives/{hive_id}/count")
-def hive_count(
-    hive_id: str,
+@app.get("/api/colonies/{colony_id}/count")
+def colony_count(
+    colony_id: str,
     start: str | None = None,
     end: str | None = None,
 ):
-    row = db().execute("SELECT conditions, site_id FROM hives WHERE id = ?", [hive_id]).fetchone()
+    row = db().execute("SELECT conditions, site_id FROM colonies WHERE id = ?", [colony_id]).fetchone()
     if not row:
-        raise HTTPException(404, "Hive not found")
+        raise HTTPException(404, "Colony not found")
     steps = json.loads(row[0])
-    hive_site_id = row[1]
+    colony_site_id = row[1]
 
     filters = []
     params: list = []
-    if hive_site_id:
+    if colony_site_id:
         filters.append("site_id = ?")
-        params.append(hive_site_id)
+        params.append(colony_site_id)
     if start:
         filters.append("timestamp >= CAST(? AS TIMESTAMP)")
         params.append(start)
@@ -399,7 +399,7 @@ def hive_count(
     # Fetch full event history for UUIDs active in the date/site scope.
     # Subquery finds qualifying UUIDs; outer query gets their complete history
     # so _mark_entries correctly identifies the true first-ever page view.
-    site_clause = " AND site_id = ?" if hive_site_id else ""
+    site_clause = " AND site_id = ?" if colony_site_id else ""
     events_rows = db().execute(
         f"""
         SELECT uuid, session_id, event_name, page_path, timestamp, properties
@@ -407,11 +407,11 @@ def hive_count(
         WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
         ORDER BY uuid, timestamp
         """,
-        params + ([hive_site_id] if hive_site_id else []),
+        params + ([colony_site_id] if colony_site_id else []),
     ).fetchall()
 
     if not events_rows:
-        return {"hive_id": hive_id, "count": 0}
+        return {"colony_id": colony_id, "count": 0}
 
     journeys: dict[str, list[tuple]] = {}
     for r in events_rows:
@@ -422,18 +422,18 @@ def hive_count(
         if _journey_matches(evts, steps):
             count += 1
 
-    return {"hive_id": hive_id, "count": count}
+    return {"colony_id": colony_id, "count": count}
 
 
-@app.get("/api/hives/compare")
-def compare_hives(
-    hive_a: str,
-    hive_b: str,
+@app.get("/api/colonies/compare")
+def compare_colonies(
+    colony_a: str,
+    colony_b: str,
     start: str | None = None,
     end: str | None = None,
 ):
-    set_a = _matching_uuids(hive_a, start, end)
-    set_b = _matching_uuids(hive_b, start, end)
+    set_a = _matching_uuids(colony_a, start, end)
+    set_b = _matching_uuids(colony_b, start, end)
     overlap = set_a & set_b
     return {
         "a_count": len(set_a),
@@ -450,14 +450,14 @@ _uuid_set_cache: dict[tuple, tuple[frozenset, float]] = {}
 _UUID_CACHE_TTL = 300  # 5 minutes
 
 
-def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str]:
-    """Return the set of UUIDs matching a hive's steps for the given date range.
+def _matching_uuids(colony_id: str, start: str | None, end: str | None) -> set[str]:
+    """Return the set of UUIDs matching a colony's steps for the given date range.
 
-    Results are cached per (hive_id, start, end) for up to 5 minutes so that
+    Results are cached per (colony_id, start, end) for up to 5 minutes so that
     multiple pollination count/overlap requests sharing a colony only pay the
     computation cost once.
     """
-    key = (hive_id, start or "", end or "")
+    key = (colony_id, start or "", end or "")
     today = date.today().isoformat()
     is_live = end is None or end >= today
 
@@ -468,17 +468,17 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
             if time.time() - ts < _UUID_CACHE_TTL:
                 return set(result)
 
-    row = db().execute("SELECT conditions, site_id FROM hives WHERE id = ?", [hive_id]).fetchone()
+    row = db().execute("SELECT conditions, site_id FROM colonies WHERE id = ?", [colony_id]).fetchone()
     if not row:
         return set()
     steps = json.loads(row[0])
-    hive_site_id = row[1]
+    colony_site_id = row[1]
 
     filters: list[str] = []
     params: list = []
-    if hive_site_id:
+    if colony_site_id:
         filters.append("site_id = ?")
-        params.append(hive_site_id)
+        params.append(colony_site_id)
     if start:
         filters.append("timestamp >= CAST(? AS TIMESTAMP)")
         params.append(start)
@@ -487,7 +487,7 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
         params.append(end)
 
     where = (" WHERE " + " AND ".join(filters)) if filters else ""
-    site_clause = " AND site_id = ?" if hive_site_id else ""
+    site_clause = " AND site_id = ?" if colony_site_id else ""
     events_rows = db().execute(
         f"""
         SELECT uuid, session_id, event_name, page_path, timestamp, properties
@@ -495,7 +495,7 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
         WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
         ORDER BY uuid, timestamp
         """,
-        params + ([hive_site_id] if hive_site_id else []),
+        params + ([colony_site_id] if colony_site_id else []),
     ).fetchall()
 
     if not events_rows:
@@ -518,23 +518,23 @@ def _matching_uuids(hive_id: str, start: str | None, end: str | None) -> set[str
 class PollinationCreate(BaseModel):
     name: str
     site_id: str | None = None
-    hive_a_id: str
-    hive_b_id: str
+    colony_a_id: str
+    colony_b_id: str
 
 
 @app.get("/api/pollinations")
 def list_pollinations(site_id: str | None = None):
     if site_id:
         rows = db().execute(
-            "SELECT id, name, site_id, hive_a_id, hive_b_id, created_at FROM pollinations WHERE site_id = ? ORDER BY created_at DESC",
+            "SELECT id, name, site_id, colony_a_id, colony_b_id, created_at FROM pollinations WHERE site_id = ? ORDER BY created_at DESC",
             [site_id],
         ).fetchall()
     else:
         rows = db().execute(
-            "SELECT id, name, site_id, hive_a_id, hive_b_id, created_at FROM pollinations WHERE site_id IS NULL ORDER BY created_at DESC"
+            "SELECT id, name, site_id, colony_a_id, colony_b_id, created_at FROM pollinations WHERE site_id IS NULL ORDER BY created_at DESC"
         ).fetchall()
     return [
-        {"id": r[0], "name": r[1], "site_id": r[2], "hive_a_id": r[3], "hive_b_id": r[4], "created_at": str(r[5])}
+        {"id": r[0], "name": r[1], "site_id": r[2], "colony_a_id": r[3], "colony_b_id": r[4], "created_at": str(r[5])}
         for r in rows
     ]
 
@@ -546,11 +546,11 @@ def create_pollination(body: PollinationCreate):
     pol_id = str(_uuid.uuid4())
     now = datetime.now().isoformat()
     db().execute(
-        "INSERT INTO pollinations (id, name, site_id, hive_a_id, hive_b_id, created_at) VALUES (?,?,?,?,?,?)",
-        [pol_id, body.name.strip(), body.site_id or None, body.hive_a_id, body.hive_b_id, now],
+        "INSERT INTO pollinations (id, name, site_id, colony_a_id, colony_b_id, created_at) VALUES (?,?,?,?,?,?)",
+        [pol_id, body.name.strip(), body.site_id or None, body.colony_a_id, body.colony_b_id, now],
     )
     return {"id": pol_id, "name": body.name.strip(), "site_id": body.site_id or None,
-            "hive_a_id": body.hive_a_id, "hive_b_id": body.hive_b_id, "created_at": now}
+            "colony_a_id": body.colony_a_id, "colony_b_id": body.colony_b_id, "created_at": now}
 
 
 @app.delete("/api/pollinations/{pol_id}")
@@ -568,7 +568,7 @@ def pollination_count(
     start: str | None = None,
     end: str | None = None,
 ):
-    row = db().execute("SELECT hive_a_id, hive_b_id FROM pollinations WHERE id = ?", [pol_id]).fetchone()
+    row = db().execute("SELECT colony_a_id, colony_b_id FROM pollinations WHERE id = ?", [pol_id]).fetchone()
     if not row:
         raise HTTPException(404, "Pollination not found")
     set_a = _matching_uuids(row[0], start, end)
@@ -592,7 +592,7 @@ def pollination_overlap_uuids(
     limit: int = 100,
     offset: int = 0,
 ):
-    row = db().execute("SELECT hive_a_id, hive_b_id FROM pollinations WHERE id = ?", [pol_id]).fetchone()
+    row = db().execute("SELECT colony_a_id, colony_b_id FROM pollinations WHERE id = ?", [pol_id]).fetchone()
     if not row:
         raise HTTPException(404, "Pollination not found")
     set_a = _matching_uuids(row[0], start, end)

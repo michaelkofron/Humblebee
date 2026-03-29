@@ -4,3 +4,4 @@ frontend/node_modules/
 frontend/dist/
 storage/*.duckdb*
 .env
+michaelsnotes.md

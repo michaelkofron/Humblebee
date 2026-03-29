@@ -261,7 +261,7 @@ def seed():
     print("Clearing existing data...")
     con.execute("DELETE FROM events")
     con.execute("DELETE FROM sites")
-    con.execute("DELETE FROM hives")
+    con.execute("DELETE FROM colonies")
     print("  done.")
 
     # ── Insert sites ──────────────────────────────────────────────────────────

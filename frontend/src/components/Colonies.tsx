@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Journey, JourneyEvent, UuidRow, Hive, ConditionRow, ConditionStep, HiveConditionField, HiveConditionMatch, HiveSequence, StepOperator } from '../types'
+import type { Journey, JourneyEvent, UuidRow, Colony, ConditionRow, ConditionStep, ColonyConditionField, ColonyConditionMatch, ColonySequence, StepOperator } from '../types'
 
 const PAGE_SIZE = 100
 
-const CONDITION_FIELDS: { value: HiveConditionField; label: string; placeholder: string }[] = [
+const CONDITION_FIELDS: { value: ColonyConditionField; label: string; placeholder: string }[] = [
   { value: 'event_name',    label: 'Action',        placeholder: 'e.g. signup' },
   { value: 'page_path',     label: 'Page path',     placeholder: 'e.g. /pricing' },
   { value: 'entry_page',    label: 'Entry page',    placeholder: 'e.g. /blog/getting-started' },
@@ -11,7 +11,7 @@ const CONDITION_FIELDS: { value: HiveConditionField; label: string; placeholder:
 ]
 
 // Cross-field companions (self-compatibility is handled separately by match type below).
-const FIELD_COMPANIONS: Record<HiveConditionField, HiveConditionField[]> = {
+const FIELD_COMPANIONS: Record<ColonyConditionField, ColonyConditionField[]> = {
   entry_page:    ['page_referrer'],
   event_name:    [],
   page_path:     ['page_referrer'],
@@ -19,9 +19,9 @@ const FIELD_COMPANIONS: Record<HiveConditionField, HiveConditionField[]> = {
 }
 
 /** Effective companions for a row: cross-field companions + self if non-exact match. */
-function rowCompanions(row: ConditionRow): Set<HiveConditionField> {
+function rowCompanions(row: ConditionRow): Set<ColonyConditionField> {
   const isExact = row.match === 'is' || row.match === 'is_not'
-  const s = new Set<HiveConditionField>(FIELD_COMPANIONS[row.field])
+  const s = new Set<ColonyConditionField>(FIELD_COMPANIONS[row.field])
   if (!isExact) s.add(row.field)  // contains / does_not_contain → same field can repeat
   return s
 }
@@ -31,7 +31,7 @@ function rowCompanions(row: ConditionRow): Set<HiveConditionField> {
  * this row must also be non-exact — can't mix "contains" and "is" for the same field in AND.
  * OR steps have no restriction: each condition is evaluated independently.
  */
-function allowedMatchesForRow(step: ConditionStep, rowIdx: number): HiveConditionMatch[] {
+function allowedMatchesForRow(step: ConditionStep, rowIdx: number): ColonyConditionMatch[] {
   if (step.operator === 'or') return ['is', 'is_not', 'contains', 'does_not_contain']
   const field = step.conditions[rowIdx].field
   const siblings = step.conditions.filter((_, i) => i !== rowIdx && _.field === field)
@@ -40,15 +40,15 @@ function allowedMatchesForRow(step: ConditionStep, rowIdx: number): HiveConditio
 }
 
 /** Returns the fields that are compatible for a given row position, given the other rows in the step. */
-function allowedFieldsForStep(step: ConditionStep, si: number, excludeIdx?: number): HiveConditionField[] {
-  const all: HiveConditionField[] = ['event_name', 'page_path', 'entry_page', 'page_referrer']
+function allowedFieldsForStep(step: ConditionStep, si: number, excludeIdx?: number): ColonyConditionField[] {
+  const all: ColonyConditionField[] = ['event_name', 'page_path', 'entry_page', 'page_referrer']
   const base = si === 0 ? all : all.filter(f => f !== 'entry_page')
   // OR steps: conditions are evaluated independently, so any field combination is valid.
   if (step.operator === 'or') return base
   // AND steps: all conditions must match the same event — apply intersection rules.
   const others = step.conditions.filter((_, i) => i !== excludeIdx)
   if (others.length === 0) return base
-  let allowed = new Set<HiveConditionField>(base)
+  let allowed = new Set<ColonyConditionField>(base)
   for (const row of others) {
     const companions = rowCompanions(row)
     allowed = new Set([...allowed].filter(f => companions.has(f)))
@@ -56,21 +56,21 @@ function allowedFieldsForStep(step: ConditionStep, si: number, excludeIdx?: numb
   return [...allowed]
 }
 
-const MATCH_OPTIONS: { value: HiveConditionMatch; label: string }[] = [
+const MATCH_OPTIONS: { value: ColonyConditionMatch; label: string }[] = [
   { value: 'is',               label: 'is' },
   { value: 'is_not',           label: 'is not' },
   { value: 'contains',         label: 'contains' },
   { value: 'does_not_contain', label: 'does not contain' },
 ]
 
-const SEQUENCE_OPTIONS: { value: HiveSequence; label: string }[] = [
+const SEQUENCE_OPTIONS: { value: ColonySequence; label: string }[] = [
   { value: 'immediately',   label: 'immediately after' },
   { value: 'same_session',  label: 'in the same session' },
   { value: 'next_session',  label: 'in the next session' },
   { value: 'anytime',       label: 'any time later' },
 ]
 
-function placeholderFor(field: HiveConditionField) {
+function placeholderFor(field: ColonyConditionField) {
   return CONDITION_FIELDS.find(f => f.value === field)?.placeholder ?? ''
 }
 
@@ -120,7 +120,7 @@ function groupBySession(events: JourneyEvent[]) {
 }
 
 const newRow = (): ConditionRow => ({ field: 'event_name', match: 'is', value: '' })
-const newStep = (sequence: HiveSequence = 'anytime'): ConditionStep => ({
+const newStep = (sequence: ColonySequence = 'anytime'): ConditionStep => ({
   sequence,
   operator: 'and',
   conditions: [newRow()],
@@ -146,7 +146,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
   const [filterLoading, setFilterLoading] = useState(false)
 
   // Saved colonies
-  const [colonies, setColonies] = useState<Hive[]>([])
+  const [colonies, setColonies] = useState<Colony[]>([])
   const [colonyCounts, setColonyCounts] = useState<Record<string, number>>({})
   const [countLoading, setCountLoading] = useState<Record<string, boolean>>({})
   const [expandedColony, setExpandedColony] = useState<string | null>(null)
@@ -231,7 +231,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
       const p = new URLSearchParams()
       if (sd) p.set('start', sd)
       if (ed) p.set('end', ed)
-      fetch(`/api/hives/${id}/count?${p}`)
+      fetch(`/api/colonies/${id}/count?${p}`)
         .then(r => r.json())
         .then(d => setColonyCounts(prev => ({ ...prev, [id]: d.count })))
         .catch(() => {})
@@ -243,11 +243,11 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
   const loadColonies = useCallback(() => {
     const p = new URLSearchParams()
     if (siteId) p.set('site_id', siteId)
-    fetch(`/api/hives?${p}`)
+    fetch(`/api/colonies?${p}`)
       .then(r => r.json())
-      .then((hives: Hive[]) => {
-        setColonies(hives)
-        countAll(hives.map(h => h.id), startDate, endDate)
+      .then((data: Colony[]) => {
+        setColonies(data)
+        countAll(data.map(h => h.id), startDate, endDate)
       })
       .catch(() => {})
   }, [siteId, startDate, endDate, countAll])
@@ -284,7 +284,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
       const allowed = allowedFieldsForStep(withOp, si)
       const field = allowed[0] ?? 'event_name'
       const hasNonExact = operator === 'and' && s.conditions.some(r => r.field === field && (r.match === 'contains' || r.match === 'does_not_contain'))
-      const match: HiveConditionMatch = hasNonExact ? 'contains' : 'is'
+      const match: ColonyConditionMatch = hasNonExact ? 'contains' : 'is'
       return { ...withOp, conditions: [...s.conditions, { field, match, value: '' }] }
     }))
   }
@@ -310,12 +310,12 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
     ))
   }
 
-  const updateStepSequence = (si: number, sequence: HiveSequence) => {
+  const updateStepSequence = (si: number, sequence: ColonySequence) => {
     setSteps(prev => prev.map((s, i) => i === si ? { ...s, sequence } : s))
   }
 
   // Colony UUID fetch + accordion
-  const fetchColonyUuids = useCallback((colony: Hive, offset: number, append: boolean) => {
+  const fetchColonyUuids = useCallback((colony: Colony, offset: number, append: boolean) => {
     if (append) setColonyLoadingMore(true)
     else setColonyUuidLoading(prev => ({ ...prev, [colony.id]: true }))
     fetch('/api/journey/search', {
@@ -344,7 +344,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
 
   const isLive = endDate === new Date().toISOString().slice(0, 10)
 
-  const toggleColony = (colony: Hive) => {
+  const toggleColony = (colony: Colony) => {
     if (expandedColony === colony.id) {
       setExpandedColony(null)
     } else {
@@ -384,12 +384,12 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
   const countColony = (id: string) => countAll([id], startDate, endDate)
 
   const deleteColony = async (id: string) => {
-    const r = await fetch(`/api/hives/${id}/pollination-count`).then(r => r.json()).catch(() => ({ count: 0, names: [] }))
+    const r = await fetch(`/api/colonies/${id}/pollination-count`).then(r => r.json()).catch(() => ({ count: 0, names: [] }))
     const message = r.count > 0
       ? `This colony is used in ${r.count} pollination${r.count !== 1 ? 's' : ''} (${r.names.join(', ')}). Deleting it will also delete those pollinations.\n\nContinue?`
       : 'Delete this colony?'
     if (!confirm(message)) return
-    await fetch(`/api/hives/${id}`, { method: 'DELETE' }).catch(() => {})
+    await fetch(`/api/colonies/${id}`, { method: 'DELETE' }).catch(() => {})
     setColonies(c => c.filter(x => x.id !== id))
     onColonyMutated?.()
   }
@@ -399,7 +399,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
     if (!stepsValid) { setSaveError('All conditions need a value'); return }
     setSaving(true)
     setSaveError('')
-    fetch('/api/hives', {
+    fetch('/api/colonies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: colonyName.trim(), steps, site_id: siteId || null }),
@@ -514,7 +514,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
                   <select
                     className="select"
                     value={step.sequence}
-                    onChange={e => updateStepSequence(si, e.target.value as HiveSequence)}
+                    onChange={e => updateStepSequence(si, e.target.value as ColonySequence)}
                     style={{ fontSize: 12, width: '100%', marginBottom: 8 }}
                   >
                     {SEQUENCE_OPTIONS.map(o => (
@@ -550,7 +550,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
                         <select
                           className="select"
                           value={row.field}
-                          onChange={e => updateRow(si, ci, { field: e.target.value as HiveConditionField })}
+                          onChange={e => updateRow(si, ci, { field: e.target.value as ColonyConditionField })}
                           style={{ fontSize: 12 }}
                         >
                           {CONDITION_FIELDS.map(f => {
@@ -565,7 +565,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
                         <select
                           className="select"
                           value={row.match}
-                          onChange={e => updateRow(si, ci, { match: e.target.value as HiveConditionMatch })}
+                          onChange={e => updateRow(si, ci, { match: e.target.value as ColonyConditionMatch })}
                           style={{ fontSize: 12 }}
                         >
                           {MATCH_OPTIONS.map(m => {

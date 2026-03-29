@@ -44,7 +44,7 @@ def init_db() -> duckdb.DuckDBPyConnection:
     """)
 
     con.execute("""
-        CREATE TABLE IF NOT EXISTS hives (
+        CREATE TABLE IF NOT EXISTS colonies (
             id         TEXT PRIMARY KEY,
             name       TEXT NOT NULL,
             site_id    TEXT,
@@ -54,18 +54,18 @@ def init_db() -> duckdb.DuckDBPyConnection:
         )
     """)
 
-    # Migrate: add site_id to hives if missing
-    cols = [r[0] for r in con.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'hives'").fetchall()]
+    # Migrate: add site_id to colonies if missing
+    cols = [r[0] for r in con.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'colonies'").fetchall()]
     if 'site_id' not in cols:
-        con.execute("ALTER TABLE hives ADD COLUMN site_id TEXT")
+        con.execute("ALTER TABLE colonies ADD COLUMN site_id TEXT")
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS pollinations (
             id         TEXT PRIMARY KEY,
             name       TEXT NOT NULL,
             site_id    TEXT,
-            hive_a_id  TEXT NOT NULL,
-            hive_b_id  TEXT NOT NULL,
+            colony_a_id  TEXT NOT NULL,
+            colony_b_id  TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT current_timestamp
         )
     """)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ConditionStep, Hive, Journey, JourneyEvent, Pollination, PollinationCount, UuidRow } from '../types'
+import type { ConditionStep, Colony, Journey, JourneyEvent, Pollination, PollinationCount, UuidRow } from '../types'
 
 function colonySummary(steps: ConditionStep[]): string {
   return steps.map((step, si) => {
@@ -95,7 +95,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
   const [pollinations, setPollinations] = useState<Pollination[]>([])
   const [counts, setCounts] = useState<Record<string, PollinationCount>>({})
   const [countLoading, setCountLoading] = useState<Record<string, boolean>>({})
-  const [colonies, setColonies] = useState<Hive[]>([])
+  const [colonies, setColonies] = useState<Colony[]>([])
 
   // Collapsible cards + overlap UUIDs
   const [expandedPol, setExpandedPol] = useState<string | null>(null)
@@ -142,9 +142,9 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
   useEffect(() => {
     const p = new URLSearchParams()
     if (siteId) p.set('site_id', siteId)
-    fetch(`/api/hives?${p}`)
+    fetch(`/api/colonies?${p}`)
       .then(r => r.json())
-      .then((data: Hive[]) => {
+      .then((data: Colony[]) => {
         setColonies(data)
       })
       .catch(() => {})
@@ -256,10 +256,10 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
   useEffect(() => {
     if (!selectedA || !selectedB) { setPreviewCount(null); return }
     setPreviewLoading(true)
-    const p = new URLSearchParams({ hive_a: selectedA, hive_b: selectedB })
+    const p = new URLSearchParams({ colony_a: selectedA, colony_b: selectedB })
     if (startDate) p.set('start', startDate)
     if (endDate) p.set('end', endDate)
-    fetch(`/api/hives/compare?${p}`)
+    fetch(`/api/colonies/compare?${p}`)
       .then(r => r.json())
       .then((data: PollinationCount) => setPreviewCount(data))
       .catch(() => {})
@@ -294,8 +294,8 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
         body: JSON.stringify({
           name: formName.trim(),
           site_id: siteId || null,
-          hive_a_id: selectedA,
-          hive_b_id: selectedB,
+          colony_a_id: selectedA,
+          colony_b_id: selectedB,
         }),
       })
       if (!res.ok) { setSaveError('Failed to save'); return }
@@ -477,8 +477,8 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
         {pollinations.map(pol => {
           const c = counts[pol.id]
           const loading = countLoading[pol.id]
-          const nameA = colonyName(pol.hive_a_id)
-          const nameB = colonyName(pol.hive_b_id)
+          const nameA = colonyName(pol.colony_a_id)
+          const nameB = colonyName(pol.colony_b_id)
           const isOpen = expandedPol === pol.id
           const uuidList = overlapUuids[pol.id] ?? []
           const uuidLoading = overlapUuidLoading[pol.id] ?? false

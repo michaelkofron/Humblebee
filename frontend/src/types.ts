@@ -44,24 +44,24 @@ export interface UuidRow {
   custom_event_count: number
 }
 
-export type HiveConditionField = 'event_name' | 'page_path' | 'page_referrer' | 'entry_page'
-export type HiveConditionMatch = 'is' | 'is_not' | 'contains' | 'does_not_contain'
-export type HiveSequence = 'anytime' | 'immediately' | 'same_session' | 'next_session'
+export type ColonyConditionField = 'event_name' | 'page_path' | 'page_referrer' | 'entry_page'
+export type ColonyConditionMatch = 'is' | 'is_not' | 'contains' | 'does_not_contain'
+export type ColonySequence = 'anytime' | 'immediately' | 'same_session' | 'next_session'
 export type StepOperator = 'and' | 'or'
 
 export interface ConditionRow {
-  field: HiveConditionField
-  match: HiveConditionMatch
+  field: ColonyConditionField
+  match: ColonyConditionMatch
   value: string
 }
 
 export interface ConditionStep {
-  sequence: HiveSequence      // how this step relates to the previous step (ignored for first)
+  sequence: ColonySequence      // how this step relates to the previous step (ignored for first)
   operator: StepOperator      // how conditions within this step are combined
   conditions: ConditionRow[]
 }
 
-export interface Hive {
+export interface Colony {
   id: string
   name: string
   site_id: string | null
@@ -74,8 +74,8 @@ export interface Pollination {
   id: string
   name: string
   site_id: string | null
-  hive_a_id: string
-  hive_b_id: string
+  colony_a_id: string
+  colony_b_id: string
   created_at: string
 }
 
