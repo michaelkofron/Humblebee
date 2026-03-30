@@ -60,7 +60,7 @@ export default function Sites({ onSitesMutated }: { onSitesMutated: () => void }
 
   const startEditingEvents = (site: Site) => {
     setEditingEvents(site.site_id)
-    setEventDraft(site.allowed_events.join(', '))
+    setEventDraft(site.allowed_actions.join(', '))
     setEventInput('')
   }
 
@@ -69,12 +69,12 @@ export default function Sites({ onSitesMutated }: { onSitesMutated: () => void }
     if (!val) return
     const site = sites.find(s => s.site_id === siteId)
     if (!site) return
-    if (site.allowed_events.includes(val)) { setEventInput(''); return }
-    const updated = [...site.allowed_events, val]
+    if (site.allowed_actions.includes(val)) { setEventInput(''); return }
+    const updated = [...site.allowed_actions, val]
     fetch(`/api/sites/${siteId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ allowed_events: updated }),
+      body: JSON.stringify({ allowed_actions: updated }),
     })
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(() => { setEventInput(''); fetchSites() })
@@ -84,11 +84,11 @@ export default function Sites({ onSitesMutated }: { onSitesMutated: () => void }
   const removeEvent = (siteId: string, eventName: string) => {
     const site = sites.find(s => s.site_id === siteId)
     if (!site) return
-    const updated = site.allowed_events.filter(e => e !== eventName)
+    const updated = site.allowed_actions.filter(e => e !== eventName)
     fetch(`/api/sites/${siteId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ allowed_events: updated }),
+      body: JSON.stringify({ allowed_actions: updated }),
     })
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
       .then(() => fetchSites())
@@ -193,7 +193,7 @@ export default function Sites({ onSitesMutated }: { onSitesMutated: () => void }
                   </button>
                   <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }}
                     onClick={() => editingEvents === s.site_id ? setEditingEvents(null) : startEditingEvents(s)}>
-                    {editingEvents === s.site_id ? 'Done' : 'Allowed events'}
+                    {editingEvents === s.site_id ? 'Done' : 'Allowed actions'}
                   </button>
                   {deleteConfirm === s.site_id ? (
                     <>
@@ -209,18 +209,18 @@ export default function Sites({ onSitesMutated }: { onSitesMutated: () => void }
                 </div>
               </div>
 
-              {/* Allowed events editor */}
+              {/* Allowed actions editor */}
               {editingEvents === s.site_id && (
                 <div className="card-body" style={{ borderTop: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                    Only events listed here will be accepted. Page views are always tracked.
-                    Use these in your HTML with <code style={{ background: 'var(--surface-raised)', padding: '1px 4px', borderRadius: 3 }}>data-buzz-on-click</code> or <code style={{ background: 'var(--surface-raised)', padding: '1px 4px', borderRadius: 3 }}>data-buzz-on-view</code>, or in JS with <code style={{ background: 'var(--surface-raised)', padding: '1px 4px', borderRadius: 3 }}>humblebee.buzz("event")</code>.
+                    Only actions listed here will be accepted. Page views are always tracked.
+                    Use these in your HTML with <code style={{ background: 'var(--surface-raised)', padding: '1px 4px', borderRadius: 3 }}>data-buzz-on-click</code> or <code style={{ background: 'var(--surface-raised)', padding: '1px 4px', borderRadius: 3 }}>data-buzz-on-view</code>, or in JS with <code style={{ background: 'var(--surface-raised)', padding: '1px 4px', borderRadius: 3 }}>humblebee.buzz("action")</code>.
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                    {s.allowed_events.length === 0 && (
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No events defined yet</span>
+                    {s.allowed_actions.length === 0 && (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No actions defined yet</span>
                     )}
-                    {s.allowed_events.map(ev => (
+                    {s.allowed_actions.map(ev => (
                       <span key={ev} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4,
                         padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 500,
@@ -237,7 +237,7 @@ export default function Sites({ onSitesMutated }: { onSitesMutated: () => void }
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
                       className="input"
-                      placeholder="event_name"
+                      placeholder="action_name"
                       value={eventInput}
                       onChange={e => setEventInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') addEvent(s.site_id) }}

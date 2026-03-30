@@ -4,7 +4,7 @@ export interface Site {
   site_name: string
   domain: string
   created_at: string
-  allowed_events: string[]
+  allowed_actions: string[]
 }
 
 export interface OverviewStats {

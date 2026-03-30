@@ -70,13 +70,13 @@ def health():
 @app.get("/api/sites")
 def list_sites():
     rows = db().execute(
-        "SELECT site_id, site_uuid, site_name, domain, created_at, allowed_events FROM sites ORDER BY site_name"
+        "SELECT site_id, site_uuid, site_name, domain, created_at, allowed_actions FROM sites ORDER BY site_name"
     ).fetchall()
     return [
         {
             "site_id": r[0], "site_uuid": r[1], "site_name": r[2],
             "domain": r[3], "created_at": str(r[4]),
-            "allowed_events": json.loads(r[5]) if r[5] else [],
+            "allowed_actions": json.loads(r[5]) if r[5] else [],
         }
         for r in rows
     ]
@@ -85,7 +85,7 @@ def list_sites():
 class SiteCreate(BaseModel):
     name: str
     domain: str
-    allowed_events: list[str] = []
+    allowed_actions: list[str] = []
 
 
 @app.post("/api/sites")
@@ -95,19 +95,19 @@ def create_site(body: SiteCreate):
     domain = domain.replace("https://", "").replace("http://", "").rstrip("/")
     if not name or not domain:
         raise HTTPException(400, "Name and domain are required")
-    allowed = [e.strip() for e in body.allowed_events if e.strip()]
+    allowed = [e.strip() for e in body.allowed_actions if e.strip()]
     site_id = str(_uuid.uuid4())
     site_uuid = str(_uuid.uuid4())
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     db().execute(
-        "INSERT INTO sites (site_id, site_uuid, site_name, domain, created_at, allowed_events) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO sites (site_id, site_uuid, site_name, domain, created_at, allowed_actions) VALUES (?,?,?,?,?,?)",
         [site_id, site_uuid, name, domain, now, json.dumps(allowed)],
     )
-    return {"site_id": site_id, "site_uuid": site_uuid, "site_name": name, "domain": domain, "created_at": now, "allowed_events": allowed}
+    return {"site_id": site_id, "site_uuid": site_uuid, "site_name": name, "domain": domain, "created_at": now, "allowed_actions": allowed}
 
 
 class SiteUpdate(BaseModel):
-    allowed_events: list[str]
+    allowed_actions: list[str]
 
 
 @app.put("/api/sites/{site_id}")
@@ -115,9 +115,9 @@ def update_site(site_id: str, body: SiteUpdate):
     row = db().execute("SELECT site_id FROM sites WHERE site_id = ?", [site_id]).fetchone()
     if not row:
         raise HTTPException(404, "Site not found")
-    allowed = [e.strip() for e in body.allowed_events if e.strip()]
-    db().execute("UPDATE sites SET allowed_events = ? WHERE site_id = ?", [json.dumps(allowed), site_id])
-    return {"ok": True, "allowed_events": allowed}
+    allowed = [e.strip() for e in body.allowed_actions if e.strip()]
+    db().execute("UPDATE sites SET allowed_actions = ? WHERE site_id = ?", [json.dumps(allowed), site_id])
+    return {"ok": True, "allowed_actions": allowed}
 
 
 @app.delete("/api/sites/{site_id}")

@@ -89,19 +89,19 @@ def collect(body: CollectEvent, request: Request):
     import json as _json
 
     row = _get_db().execute(
-        "SELECT site_id, domain, allowed_events FROM sites WHERE site_uuid = ?",
+        "SELECT site_id, domain, allowed_actions FROM sites WHERE site_uuid = ?",
         [body.site_uuid],
     ).fetchone()
     if not row:
         raise HTTPException(400, "Unknown site")
 
-    site_id, domain, allowed_events_raw = row
-    allowed_events = _json.loads(allowed_events_raw) if allowed_events_raw else []
+    site_id, domain, allowed_actions_raw = row
+    allowed_actions = _json.loads(allowed_actions_raw) if allowed_actions_raw else []
 
-    # page_view is always allowed; custom events must be on the allowlist
+    # page_view is always allowed; custom actions must be on the allowlist
     if body.event_name != "page_view":
-        if not allowed_events or body.event_name not in allowed_events:
-            raise HTTPException(400, "Event not allowed")
+        if not allowed_actions or body.event_name not in allowed_actions:
+            raise HTTPException(400, "Action not allowed")
 
     # Validate origin — reject if header is missing (blocks curl/console abuse)
     # or if the hostname doesn't exactly match the registered domain.
