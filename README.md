@@ -4,21 +4,27 @@
 
 Most analytics tools tell you what happened. Humblebee helps you understand *who* did it — and where those people overlap.
 
-It's a self-hosted web analytics and audience segmentation tool. Events come in through a lightweight tracking snippet, and from there you can build behavioral audience segments (Colonies) and run overlap analysis between them (Pollinations) — think Venn diagrams for your user base. No third-party data sharing, no per-seat pricing, runs entirely on your machine.
+It's a self-hosted web analytics and audience segmentation tool. A small JavaScript snippet on your site sends events to your own server. From there you can explore traffic, build behavioral audience segments called Colonies, and run overlap analysis between them called Pollinations — think Venn diagrams for your user base. No third parties ever see your data. No per-seat pricing. No cloud bill. It runs entirely on a machine you control.
 
-Currently in active development. The core analytics and segmentation loop is fully working; the JS tracking snippet and multi-site ingestion are coming next.
-
-Built with a FastAPI backend, DuckDB for query storage, and a React/TypeScript frontend.
+The whole backend is four Python files and a single DuckDB database file. The frontend is a Vite/React SPA. Total Python dependencies: four packages.
 
 ---
 
 ## Features
 
-- **Overview** — top-line stats for any date range: unique users, sessions, events, actions, pageviews, top pages, and top events; date range presets plus custom ranges, all persisted between sessions
-- **Colonies** — build behavioral audience segments with a multi-step condition builder; conditions support event name, page path, page referrer, and entry page with is / is not / contains / does not contain matching; steps can be combined with AND/OR and chained sequentially or across sessions; preview matching users live before saving
-- **Pollinations** — pick two Colonies and see their overlap as a live Venn diagram; shows total users in each, overlap count, and users unique to each side; saved Pollinations reload instantly
-- **Multi-site** — data is scoped per site; a site picker in the top bar filters all views simultaneously
-- **Date range picker** — built-in presets (Past 24 hours, Last 3/7/28/90 days, This month, Last month, Year to date) plus custom from/to; selection persists in localStorage
+**Tracking snippet** — drop one `<script>` tag on any site and you're collecting data. The snippet sets a persistent visitor cookie, manages session boundaries, tracks page views automatically including SPA navigation, and exposes a simple API for custom actions. You can also add `data-buzz-on-click` or `data-buzz-on-view` attributes to any element to fire events without writing JavaScript.
+
+**Overview** — top-line stats for any date range: unique visitors, sessions, pageviews, and custom actions. Below that, a paginated breakdown of top pages and top events. Everything updates when you change the date range or switch sites.
+
+**Colonies** — a visual condition builder for defining behavioral audience segments. Stack conditions on event name, page path, referrer, or entry page with flexible matching (is / is not / contains / does not contain). Chain steps together with AND/OR logic, and specify whether steps need to happen in the same session or across any sessions. Preview matching users in real time before saving.
+
+**Pollinations** — pick two saved Colonies and see their overlap rendered as a live Venn diagram. You get the total count for each Colony, the number of users in both, and the users unique to each side. Useful for questions like "how many of my newsletter subscribers have also visited the pricing page?"
+
+**Multi-site** — manage multiple sites from a single dashboard. Each site gets its own tracking ID and an allowlist of valid action names so arbitrary strings can't be submitted. The site picker in the top bar filters every view at once, and your last-selected site is remembered.
+
+**Date range picker** — presets for the common cases (past 24 hours, last 7/28/90 days, this month, last month, year to date) plus a custom from/to picker. Your selection is persisted between sessions.
+
+**Password protection** — optional. Set `AUTH_ENABLED=true` and `ADMIN_PASSWORD` in your `.env` and the dashboard is gated behind a login screen. Uses a secure HMAC session cookie — no database, no user table, just an env variable.
 
 ---
 
@@ -29,44 +35,65 @@ Built with a FastAPI backend, DuckDB for query storage, and a React/TypeScript f
 
 ---
 
-## Install
+## Getting started
+
+**1. Clone and install**
 
 ```bash
+git clone https://github.com/yourusername/humblebee.git
+cd humblebee
 ./install.sh
 ```
 
-Creates a Python venv, installs backend deps, runs `npm install` for the frontend.
+This creates a Python virtualenv, installs backend dependencies, and runs `npm install` for the frontend.
 
----
-
-## Seed data
-
-Since the JS tracking snippet isn't wired up yet, a seed script generates realistic fake event data so you can explore the full UI immediately.
+**2. (Optional for testing purposes) Seed the database with sample data**
 
 ```bash
 cd backend && python seed.py
 ```
 
-Populates the database with ~15,000 users across 90 days, spread across behavioural archetypes (bouncers, browsers, returners, deep readers, converters) with randomised page paths, events, and session patterns. Re-runnable — clears and reseeds each time.
+Generates ~15,000 realistic visitors across 90 days, spread across behavioral archetypes — bouncers, browsers, returners, deep readers, converters — with randomized page paths, sessions, and events. Good for exploring the UI before your real data comes in. Re-runnable; clears and reseeds each time.
 
----
-
-## Run
+**3. Start**
 
 ```bash
 ./start.sh
 ```
 
-Opens at [http://localhost:5173](http://localhost:5173). Press Ctrl+C to stop.
+Opens at [http://localhost:5173](http://localhost:5173). Backend runs on port 8000. Press Ctrl+C to stop both.
+
+---
+
+## Adding the tracking snippet to your site
+
+Go to the **Sites** tab, create a site, and copy the install snippet. It looks like this:
+
+```html
+<script src="https://your-humblebee-host.com/hb.js" data-site="YOUR-SITE-ID"></script>
+```
+
+Paste it into the `<head>` of every page. That's it — page views start flowing immediately.
+
+**Custom actions**
+
+```html
+<!-- Fire an event when an element is clicked -->
+<button data-buzz-on-click="signup_click">Sign up</button>
+
+<!-- Fire an event when an element scrolls into view (once per page load) -->
+<div data-buzz-on-view="pricing_seen">...</div>
+```
+
+```js
+// Fire an event programmatically
+humblebee.buzz('video_played')
+```
 
 ---
 
 ## Dependencies
 
-**Python** (`backend/requirements.txt`)
-- `fastapi` + `uvicorn` — API server
-- `duckdb` — analytics query engine and local storage
-- `python-dotenv` — loads `.env` file if present
+**Python** — `fastapi`, `uvicorn`, `duckdb`, `python-dotenv`
 
-**Node** (`frontend/package.json`)
-- `react`, `vite`, `typescript`
+**Node** — `react`, `vite`, `typescript`
