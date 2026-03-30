@@ -13,6 +13,14 @@ function daysAgoStr(n: number) {
 }
 
 const STORAGE_KEY = 'hb_date_range'
+const SITE_STORAGE_KEY = 'hb_selected_site'
+const VALID_VIEWS: Record<string, View> = {
+  '/': 'overview',
+  '/overview': 'overview',
+  '/colonies': 'colonies',
+  '/pollinate': 'pollinate',
+  '/sites': 'sites',
+}
 
 function loadDateRange(): { start: string; end: string; preset: string | null } {
   try {
@@ -26,10 +34,20 @@ function loadDateRange(): { start: string; end: string; preset: string | null } 
   return { start: daysAgoStr(28), end: daysAgoStr(1), preset: 'Last 28 days' }
 }
 
+function viewFromPath(): View {
+  return VALID_VIEWS[window.location.pathname] || 'overview'
+}
+
+function loadSelectedSite(): string {
+  try {
+    return localStorage.getItem(SITE_STORAGE_KEY) || ''
+  } catch { return '' }
+}
+
 export default function App() {
   const [sites, setSites] = useState<Site[]>([])
-  const [selectedSite, setSelectedSite] = useState<string>('')
-  const [view, setView] = useState<View>('overview')
+  const [selectedSite, setSelectedSite] = useState<string>(loadSelectedSite)
+  const [view, setView] = useState<View>(viewFromPath)
   const [startDate, setStartDate] = useState(() => loadDateRange().start)
   const [endDate, setEndDate] = useState(() => loadDateRange().end)
   const [initialPreset] = useState<string | null>(() => loadDateRange().preset)
@@ -44,6 +62,26 @@ export default function App() {
   }, [])
 
   useEffect(() => { fetchSites() }, [fetchSites])
+
+  // Sync view to URL path
+  const navigate = (v: View) => {
+    const path = v === 'overview' ? '/' : '/' + v
+    window.history.pushState(null, '', path)
+    setView(v)
+  }
+
+  // Listen for back/forward
+  useEffect(() => {
+    const onPop = () => setView(viewFromPath())
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Persist selected site
+  const handleSiteChange = (siteId: string) => {
+    setSelectedSite(siteId)
+    try { localStorage.setItem(SITE_STORAGE_KEY, siteId) } catch {}
+  }
 
   const handleDateChange = (start: string, end: string, preset: string | null) => {
     setStartDate(start)
@@ -60,7 +98,6 @@ export default function App() {
     { key: 'overview', label: 'Overview' },
     { key: 'colonies', label: 'Colonies' },
     { key: 'pollinate', label: 'Pollinations' },
-    { key: 'sites', label: 'Sites' },
   ]
 
   return (
@@ -72,7 +109,7 @@ export default function App() {
         <select
           className="select"
           value={selectedSite}
-          onChange={e => setSelectedSite(e.target.value)}
+          onChange={e => handleSiteChange(e.target.value)}
           style={{ minWidth: 160 }}
         >
           <option value="">All sites</option>
@@ -80,6 +117,14 @@ export default function App() {
             <option key={s.site_id} value={s.site_id}>{s.site_name}</option>
           ))}
         </select>
+
+        <button
+          className={`topbar-tab sites-tab${view === 'sites' ? ' active' : ''}`}
+          onClick={() => navigate('sites')}
+          title="Manage sites"
+        >
+          edit sites
+        </button>
 
         <DateRangePicker
           startDate={startDate}
@@ -93,7 +138,7 @@ export default function App() {
             <button
               key={t.key}
               className={`topbar-tab${view === t.key ? ' active' : ''}`}
-              onClick={() => setView(t.key)}
+              onClick={() => navigate(t.key)}
             >
               {t.label}
             </button>

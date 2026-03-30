@@ -94,6 +94,23 @@ body {
   font-weight: 600;
 }
 
+.topbar-tab.sites-tab {
+  font-size: 12px;
+  padding: 4px 10px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.topbar-tab.sites-tab:hover {
+  color: var(--text-secondary);
+}
+
+.topbar-tab.sites-tab.active {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border-color: var(--primary);
+}
+
 /* ── Shared ─────────────────────────────────────────────────────────────── */
 
 .main {
