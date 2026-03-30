@@ -5,12 +5,7 @@ import Colonies from './components/Colonies'
 import Pollinate from './components/Pollinate'
 import Sites from './components/Sites'
 import DateRangePicker from './components/DateRangePicker'
-
-function daysAgoStr(n: number) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
+import { daysAgoStr, localDateStr } from './utils'
 
 const STORAGE_KEY = 'hb_date_range'
 const SITE_STORAGE_KEY = 'hb_selected_site'
@@ -172,7 +167,7 @@ function AppInner() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ start, end, preset })) } catch {}
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateStr(new Date())
   const rangeIncludesToday = endDate === today
   const daySpan = Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000)
   const showCacheBanner = rangeIncludesToday && daySpan > 30

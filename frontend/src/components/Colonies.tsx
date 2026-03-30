@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Journey, JourneyEvent, UuidRow, Colony, ConditionRow, ConditionStep, ColonyConditionField, ColonyConditionMatch, ColonySequence, StepOperator } from '../types'
+import { formatTs, localDateStr } from '../utils'
 
 const PAGE_SIZE = 100
 
@@ -74,9 +75,6 @@ function placeholderFor(field: ColonyConditionField) {
   return CONDITION_FIELDS.find(f => f.value === field)?.placeholder ?? ''
 }
 
-function formatTs(ts: string) {
-  return new Date(ts).toLocaleString()
-}
 
 function stepsSummary(steps: ConditionStep[]): string {
   return steps.map((step, si) => {
@@ -342,7 +340,7 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
       })
   }, [siteId, startDate, endDate])
 
-  const isLive = endDate === new Date().toISOString().slice(0, 10)
+  const isLive = endDate === localDateStr(new Date())
 
   const toggleColony = (colony: Colony) => {
     if (expandedColony === colony.id) {

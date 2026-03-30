@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-
-function daysAgoStr(n: number) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
+import { daysAgoStr, localDateStr } from '../utils'
 
 function formatDisplay(date: string) {
   const [y, m, d] = date.split('-').map(Number)
@@ -18,7 +13,7 @@ const PRESETS = [
   { label: 'Last 28 days',  start: () => daysAgoStr(28), end: () => daysAgoStr(1) },
   { label: 'Last 90 days',  start: () => daysAgoStr(90), end: () => daysAgoStr(1) },
   { label: 'This month',    start: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }, end: () => daysAgoStr(1) },
-  { label: 'Last month',    start: () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10) }, end: () => { const d = new Date(); d.setDate(0); return d.toISOString().slice(0, 10) } },
+  { label: 'Last month',    start: () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return localDateStr(d) }, end: () => { const d = new Date(); d.setDate(0); return localDateStr(d) } },
   { label: 'Year to date',  start: () => `${new Date().getFullYear()}-01-01`, end: () => daysAgoStr(1) },
 ]
 

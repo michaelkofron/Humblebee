@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConditionStep, Colony, Journey, JourneyEvent, Pollination, PollinationCount, UuidRow } from '../types'
+import { formatTs, localDateStr } from '../utils'
 
 function colonySummary(steps: ConditionStep[]): string {
   return steps.map((step, si) => {
@@ -11,9 +12,6 @@ function colonySummary(steps: ConditionStep[]): string {
 
 const PAGE_SIZE = 100
 
-function formatTs(ts: string) {
-  return new Date(ts).toLocaleString()
-}
 
 function uuidSubline(u: UuidRow) {
   const events = u.first_custom_event
@@ -215,7 +213,7 @@ export default function Pollinate({ siteId, siteName, startDate, endDate, coloni
       })
   }, [startDate, endDate])
 
-  const isLive = endDate === new Date().toISOString().slice(0, 10)
+  const isLive = endDate === localDateStr(new Date())
 
   const togglePol = (id: string) => {
     if (expandedPol === id) {
