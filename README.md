@@ -1,6 +1,6 @@
 # 🐝 Humblebee
 
-https://github.com/user-attachments/assets/395b2148-cfa9-4243-85e9-f87fca0b54a2
+https://github.com/user-attachments/assets/2d2ef9b2-ebb4-4bca-8d5a-5bb9a6c30006
 
 Most analytics tools tell you what happened. Humblebee helps you understand *who* did it — and where those people overlap.
 
