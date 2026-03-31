@@ -1,10 +1,10 @@
-# Humblebee
+# 🐝 Humblebee
 
-![Humblebee screenshot](screenshot.png)
+https://github.com/user-attachments/assets/395b2148-cfa9-4243-85e9-f87fca0b54a2
 
 Most analytics tools tell you what happened. Humblebee helps you understand *who* did it — and where those people overlap.
 
-It's a self-hosted web analytics and audience segmentation tool. A small JavaScript snippet on your site sends events to your own server. From there you can explore traffic, build behavioral audience segments called Colonies, and run overlap analysis between them called Pollinations — think Venn diagrams for your user base. No third parties ever see your data. No per-seat pricing. No cloud bill. It runs entirely on a machine you control.
+It's a self-hosted web analytics and audience segmentation tool. A small JavaScript snippet on your site sends events to your own server. From there you can explore traffic, build behavioral audience segments called Colonies, and run overlap analysis between them called Pollinations — think Venn diagrams for your user base.
 
 The whole backend is four Python files and a single DuckDB database file. The frontend is a Vite/React SPA. Total Python dependencies: four packages.
 
