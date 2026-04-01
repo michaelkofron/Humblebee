@@ -252,6 +252,20 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
 
   useEffect(loadColonies, [siteId])
 
+  // Clear all preview/filter state when the site changes
+  useEffect(() => {
+    setUuids([])
+    setTotalUuids(0)
+    setFilterActive(false)
+    setSteps([])
+    setJourney(null)
+    setJourneyError('')
+    setExpandedColony(null)
+    setColonyUuids({})
+    setColonyCounts({})
+    setCountLoading({})
+  }, [siteId])
+
   // Journey lookup
   const loadJourney = (uuid: string) => {
     setJourneyLoading(true)
@@ -379,7 +393,6 @@ export default function Colonies({ siteId, siteName, startDate, endDate, onColon
     }
   }, [startDate, endDate, filterActive, colonies, countAll, expandedColony, fetchColonyUuids])
 
-  const countColony = (id: string) => countAll([id], startDate, endDate)
 
   const deleteColony = async (id: string) => {
     const r = await fetch(`/api/colonies/${id}/pollination-count`).then(r => r.json()).catch(() => ({ count: 0, names: [] }))
