@@ -5,7 +5,7 @@ import Colonies from './components/Colonies'
 import Pollinate from './components/Pollinate'
 import Sites from './components/Sites'
 import DateRangePicker from './components/DateRangePicker'
-import { daysAgoStr, localDateStr } from './utils'
+import { DATE_PRESETS, daysAgoStr, localDateStr } from './utils'
 
 const STORAGE_KEY = 'hb_date_range'
 const SITE_STORAGE_KEY = 'hb_selected_site'
@@ -22,8 +22,14 @@ function loadDateRange(): { start: string; end: string; preset: string | null } 
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const r = JSON.parse(raw)
+      // If a named preset is stored, recompute its dates fresh so they don't go stale across sessions.
+      if (r.preset) {
+        const preset = DATE_PRESETS.find(p => p.label === r.preset)
+        if (preset) return { start: preset.start(), end: preset.end(), preset: r.preset }
+      }
+      // Custom range: use the stored absolute dates as-is.
       if (typeof r.start === 'string' && typeof r.end === 'string')
-        return { start: r.start, end: r.end, preset: r.preset ?? null }
+        return { start: r.start, end: r.end, preset: null }
     }
   } catch {}
   return { start: daysAgoStr(28), end: daysAgoStr(1), preset: 'Last 28 days' }

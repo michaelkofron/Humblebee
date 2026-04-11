@@ -1,21 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { daysAgoStr, localDateStr } from '../utils'
+import { DATE_PRESETS } from '../utils'
 
 function formatDisplay(date: string) {
   const [y, m, d] = date.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
-
-const PRESETS = [
-  { label: 'Past 24 hours', start: () => daysAgoStr(0),  end: () => daysAgoStr(0) },
-  { label: 'Last 3 days',   start: () => daysAgoStr(3),  end: () => daysAgoStr(1) },
-  { label: 'Last 7 days',   start: () => daysAgoStr(7),  end: () => daysAgoStr(1) },
-  { label: 'Last 28 days',  start: () => daysAgoStr(28), end: () => daysAgoStr(1) },
-  { label: 'Last 90 days',  start: () => daysAgoStr(90), end: () => daysAgoStr(1) },
-  { label: 'This month',    start: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }, end: () => daysAgoStr(1) },
-  { label: 'Last month',    start: () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return localDateStr(d) }, end: () => { const d = new Date(); d.setDate(0); return localDateStr(d) } },
-  { label: 'Year to date',  start: () => `${new Date().getFullYear()}-01-01`, end: () => daysAgoStr(1) },
-]
 
 interface Props {
   startDate: string
@@ -38,7 +27,7 @@ export default function DateRangePicker({ startDate, endDate, onChange, initialA
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const applyPreset = (preset: typeof PRESETS[number]) => {
+  const applyPreset = (preset: typeof DATE_PRESETS[number]) => {
     const s = preset.start(), e = preset.end()
     setActivePreset(preset.label)
     setDraft({ start: s, end: e })
@@ -83,7 +72,7 @@ export default function DateRangePicker({ startDate, endDate, onChange, initialA
         }}>
           {/* Presets */}
           <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', padding: '8px 0', minWidth: 140 }}>
-            {PRESETS.map(p => (
+            {DATE_PRESETS.map(p => (
               <button
                 key={p.label}
                 onClick={() => applyPreset(p)}
