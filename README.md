@@ -65,6 +65,41 @@ Opens at [http://localhost:5173](http://localhost:5173). Backend runs on port 80
 
 ---
 
+## Deploying with Docker
+
+A `Dockerfile` is included. It builds the frontend and packages everything into a single container — no separate Node process needed in production.
+
+**Build and run locally with Docker**
+
+```bash
+docker build -t humblebee .
+docker run -p 8000:8000 humblebee
+```
+
+Then open [http://localhost:8000](http://localhost:8000).
+
+**Deploy to any container platform** (Railway, Render, Fly.io, DigitalOcean App Platform, etc.)
+
+Point the platform at this repository. It will detect the `Dockerfile` and build automatically. Set the following environment variables in your platform's dashboard:
+
+| Variable | Required | Description |
+|---|---|---|
+| `AUTH_ENABLED` | Recommended | Set to `true` to require a password |
+| `ADMIN_PASSWORD` | Recommended | The dashboard password |
+| `SECURE_COOKIES` | Recommended | Set to `true` when serving over HTTPS |
+| `DB_PATH` | Optional | Path to the DuckDB file (default: `storage/humblebee.duckdb`) |
+
+**Persisting data**
+
+The DuckDB database is a single file at `storage/humblebee.duckdb` inside the container. Without a persistent volume, it will reset on every redeploy. To persist data:
+
+- Mount a volume to `/app/storage`
+- Or set `DB_PATH` to a path on your mounted volume (e.g. `/data/humblebee.duckdb`)
+
+Most platforms (Railway, Render, Fly.io) offer persistent volumes you can attach in their dashboard.
+
+---
+
 ## Adding the tracking snippet to your site
 
 Go to the **Sites** tab, create a site, and copy the install snippet. It looks like this:

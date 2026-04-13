@@ -8,9 +8,12 @@ import time
 import uuid as _uuid
 from datetime import date, datetime, timedelta
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -1008,3 +1011,11 @@ def _event_matches(event: tuple, field: str, value: str, contains: bool = False)
         return False
 
     return (value in target) if contains else (target == value)
+
+
+# ── Serve frontend (production) ───────────────────────────────────────────────
+# Only active when the React build exists (i.e. in production / Docker).
+# In dev, Vite serves the frontend separately and proxies /api to this server.
+_FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+if _FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")
