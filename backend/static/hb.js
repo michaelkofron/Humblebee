@@ -62,17 +62,10 @@
   // -- Send helper --
 
   // Sends an event to the collect endpoint. Used by both page views and custom events.
-  // Prefer sendBeacon (reliable on page unload, no keepalive bugs on iOS Safari).
-  // Fall back to plain fetch for environments where sendBeacon is unavailable.
   function send(eventName,props){
     var p=location.pathname+location.search;
     var body=JSON.stringify({site_uuid:sk,uuid:u,session_id:sid,event_name:eventName,page_path:p,properties:props||null});
-    var url=base+"/api/collect";
-    if(navigator.sendBeacon){
-      navigator.sendBeacon(url,new Blob([body],{type:"application/json"}));
-    }else{
-      fetch(url,{method:"POST",body:body,headers:{"Content-Type":"application/json"}}).catch(function(){});
-    }
+    fetch(base+"/api/collect",{method:"POST",body:body,headers:{"Content-Type":"application/json"}}).catch(function(){});
     sC("_hb_sid",sid,1800);
   }
 
