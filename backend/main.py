@@ -52,7 +52,7 @@ def _make_token() -> str:
 
 
 # Paths that skip auth: login, auth check, event collection, tracking script
-_PUBLIC_PATHS = {"/api/login", "/api/auth-status", "/api/collect", "/hb.js"}
+_PUBLIC_PATHS = {"/api/login", "/api/auth-status", "/api/collect", "/hb.js", "/robots.txt"}
 
 
 @app.middleware("http")
@@ -97,6 +97,14 @@ def login(req: LoginRequest, request: Request):
 @app.get("/api/auth-status")
 def auth_status():
     return {"auth_enabled": AUTH_ENABLED}
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    return Response(
+        content="User-agent: *\nDisallow: /\n",
+        media_type="text/plain",
+    )
 
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
@@ -1021,11 +1029,15 @@ if _FRONTEND_DIST.exists():
     # Serve Vite's hashed asset bundle separately.
     app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets")
 
-    # Catch-all: serve any real file from the dist root (favicon, etc.),
-    # otherwise fall back to index.html so React Router handles the path.
+    # Catch-all: serve real dist files (favicon etc.), index.html for known
+    # SPA routes, and a hard 404 for everything else so bots don't get 200s.
+    _SPA_ROUTES = {"", "overview", "colonies", "pollinate", "sites"}
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         file = _FRONTEND_DIST / full_path
         if file.is_file():
             return FileResponse(str(file))
-        return FileResponse(str(_FRONTEND_DIST / "index.html"))
+        if full_path in _SPA_ROUTES:
+            return FileResponse(str(_FRONTEND_DIST / "index.html"))
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
