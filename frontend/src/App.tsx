@@ -147,6 +147,14 @@ function AppInner() {
           window.history.pushState(null, '', '/sites')
           setView('sites')
         }
+        // If the persisted site no longer exists (deleted externally), clear it.
+        setSelectedSite(prev => {
+          if (prev && !data.some((s: Site) => s.site_id === prev)) {
+            try { localStorage.removeItem(SITE_STORAGE_KEY) } catch {}
+            return ''
+          }
+          return prev
+        })
       })
       .catch(() => {})
   }, [])
