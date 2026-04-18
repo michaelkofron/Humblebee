@@ -1,32 +1,21 @@
 """Tracking script and event collection endpoint."""
 
 import json
-import re
 import time
 import uuid as _uuid
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
+import rjsmin
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 _HB_JS_PATH = Path(__file__).parent / "static" / "hb.js"
 
-
-def _minify_js(source: str) -> str:
-    """Strip comments and collapse whitespace to produce a minified JS bundle."""
-    # Remove single-line comments (but not URLs with //)
-    out = re.sub(r'(?<![:\"\'])//[^\n]*', '', source)
-    # Remove multi-line comments
-    out = re.sub(r'/\*.*?\*/', '', out, flags=re.DOTALL)
-    # Collapse whitespace: newlines, tabs, multiple spaces → single space
-    out = re.sub(r'\s+', ' ', out)
-    # Remove spaces around operators / punctuation
-    out = re.sub(r'\s*([{};,=():\[\]<>+\-*/%!&|?])\s*', r'\1', out)
-    return out.strip()
-
+# Minify once at startup and cache — hb.js doesn't change at runtime.
+_HB_JS_MINIFIED = rjsmin.jsmin(_HB_JS_PATH.read_text())
 
 router = APIRouter()
 
@@ -61,7 +50,7 @@ def _check_rate(uid: str) -> bool:
 @router.get("/hb.js")
 def serve_tracking_script():
     return Response(
-        content=_minify_js(_HB_JS_PATH.read_text()),
+        content=_HB_JS_MINIFIED,
         media_type="application/javascript",
         headers={"Cache-Control": "public, max-age=3600"},
     )
