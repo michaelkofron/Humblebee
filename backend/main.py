@@ -163,7 +163,7 @@ def health():
 @app.get("/api/sites")
 def list_sites():
     rows = db().execute(
-        "SELECT site_id, site_uuid, site_name, domain, created_at, allowed_actions FROM sites ORDER BY site_name"
+        "SELECT site_id, site_uuid, site_name, domain, created_at, allowed_actions FROM sites ORDER BY LOWER(site_name)"
     ).fetchall()
     return [
         {
