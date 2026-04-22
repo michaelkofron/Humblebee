@@ -535,30 +535,34 @@ def colony_count(
 
     filters = []
     params: list = []
+    date_filters = []
+    date_params: list = []
     if colony_site_id:
         filters.append("site_id = ?")
         params.append(colony_site_id)
     if start:
         filters.append("timestamp >= CAST(? AS TIMESTAMP)")
         params.append(start)
+        date_filters.append("timestamp >= CAST(? AS TIMESTAMP)")
+        date_params.append(start)
     if end:
         filters.append("timestamp < CAST(? AS TIMESTAMP)")
         params.append(end)
+        date_filters.append("timestamp < CAST(? AS TIMESTAMP)")
+        date_params.append(end)
 
     where = (" WHERE " + " AND ".join(filters)) if filters else ""
+    date_clause = (" AND " + " AND ".join(date_filters)) if date_filters else ""
 
-    # Fetch full event history for UUIDs active in the date/site scope.
-    # Subquery finds qualifying UUIDs; outer query gets their complete history
-    # so _mark_entries correctly identifies the true first-ever page view.
     site_clause = " AND site_id = ?" if colony_site_id else ""
     events_rows = db().execute(
         f"""
         SELECT uuid, session_id, event_name, page_path, timestamp, properties
         FROM events
-        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
+        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}{date_clause}
         ORDER BY uuid, timestamp
         """,
-        params + ([colony_site_id] if colony_site_id else []),
+        params + ([colony_site_id] if colony_site_id else []) + date_params,
     ).fetchall()
 
     if not events_rows:
@@ -627,26 +631,33 @@ def _matching_uuids(colony_id: str, start: str | None, end: str | None) -> set[s
 
     filters: list[str] = []
     params: list = []
+    date_filters: list[str] = []
+    date_params: list = []
     if colony_site_id:
         filters.append("site_id = ?")
         params.append(colony_site_id)
     if start:
         filters.append("timestamp >= CAST(? AS TIMESTAMP)")
         params.append(start)
+        date_filters.append("timestamp >= CAST(? AS TIMESTAMP)")
+        date_params.append(start)
     if end:
         filters.append("timestamp < CAST(? AS TIMESTAMP)")
         params.append(end)
+        date_filters.append("timestamp < CAST(? AS TIMESTAMP)")
+        date_params.append(end)
 
     where = (" WHERE " + " AND ".join(filters)) if filters else ""
+    date_clause = (" AND " + " AND ".join(date_filters)) if date_filters else ""
     site_clause = " AND site_id = ?" if colony_site_id else ""
     events_rows = db().execute(
         f"""
         SELECT uuid, session_id, event_name, page_path, timestamp, properties
         FROM events
-        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
+        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}{date_clause}
         ORDER BY uuid, timestamp
         """,
-        params + ([colony_site_id] if colony_site_id else []),
+        params + ([colony_site_id] if colony_site_id else []) + date_params,
     ).fetchall()
 
     if not events_rows:
@@ -789,30 +800,34 @@ def journey_search(body: ConditionSearch):
 
     filters = []
     params: list = []
+    date_filters: list[str] = []
+    date_params: list = []
     if body.site_id:
         filters.append("site_id = ?")
         params.append(body.site_id)
     if body.start:
         filters.append("timestamp >= CAST(? AS TIMESTAMP)")
         params.append(body.start)
+        date_filters.append("timestamp >= CAST(? AS TIMESTAMP)")
+        date_params.append(body.start)
     if body.end:
         filters.append("timestamp < CAST(? AS TIMESTAMP)")
         params.append(body.end)
+        date_filters.append("timestamp < CAST(? AS TIMESTAMP)")
+        date_params.append(body.end)
 
     where = (" WHERE " + " AND ".join(filters)) if filters else ""
+    date_clause = (" AND " + " AND ".join(date_filters)) if date_filters else ""
 
-    # Fetch full event history for UUIDs active in the date/site scope.
-    # Subquery finds qualifying UUIDs; outer query gets their complete history
-    # so _mark_entries correctly identifies the true first-ever page view.
     site_clause = " AND site_id = ?" if body.site_id else ""
     events_rows = db().execute(
         f"""
         SELECT uuid, session_id, event_name, page_path, timestamp, properties
         FROM events
-        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}
+        WHERE uuid IN (SELECT DISTINCT uuid FROM events{where}){site_clause}{date_clause}
         ORDER BY uuid, timestamp
         """,
-        params + ([body.site_id] if body.site_id else []),
+        params + ([body.site_id] if body.site_id else []) + date_params,
     ).fetchall()
 
     if not events_rows:
